@@ -232,14 +232,41 @@ function decryptChromeValue(buf, aesKey) {
   return '';
 }
 
+// fs.copyFileSync fails when Chrome is running because it holds the Cookies file
+// open with an exclusive lock. On Windows we use PowerShell's FileShare.ReadWrite
+// to open the file alongside Chrome and stream it out.
+function safeCopyLockedFile(src, dst) {
+  if (process.platform !== 'win32') {
+    fs.copyFileSync(src, dst); // advisory locks on macOS/Linux — plain copy works
+    return;
+  }
+  const scriptFile = path.join(app.getPath('temp'), '_claude_copy.ps1');
+  try {
+    fs.writeFileSync(scriptFile, [
+      `$src = '${src.replace(/'/g, "''")}'`,
+      `$dst = '${dst.replace(/'/g, "''")}'`,
+      '$fs = [System.IO.File]::Open($src, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)',
+      '$fd = [System.IO.File]::Create($dst)',
+      '$fs.CopyTo($fd)',
+      '$fs.Dispose()',
+      '$fd.Dispose()',
+    ].join('\r\n'), 'utf8');
+    execSync(
+      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptFile}"`,
+      { encoding: 'utf8' }
+    );
+  } finally {
+    try { fs.unlinkSync(scriptFile); } catch {}
+  }
+}
+
 async function importChromeProfile(profileDir) {
   const dataDir    = getChromeDataDir();
   const cookiesFile = chromeCookiesPath(dataDir, profileDir);
   if (!cookiesFile) throw new Error('No Cookies file found for this profile');
 
-  // Copy to avoid lock contention if Chrome is running
   const tmpFile = path.join(app.getPath('temp'), '_claude_cookies_tmp.db');
-  fs.copyFileSync(cookiesFile, tmpFile);
+  safeCopyLockedFile(cookiesFile, tmpFile);
 
   let imported = 0;
   try {
