@@ -232,28 +232,60 @@ function decryptChromeValue(buf, aesKey) {
   return '';
 }
 
-// fs.copyFileSync fails when Chrome is running because it holds the Cookies file
-// open with an exclusive lock. On Windows we use PowerShell's FileShare.ReadWrite
-// to open the file alongside Chrome and stream it out.
+// Chrome holds its Cookies SQLite file open with a lock that blocks fs.copyFileSync.
+// We use Win32 CreateFile directly (via inline C# in PowerShell) with
+// FILE_SHARE_READ|WRITE|DELETE (7) which allows us to open and read the file
+// even while Chrome has it open. $ErrorActionPreference=Stop ensures any failure
+// exits with a non-zero code so execSync throws rather than silently producing
+// an empty destination file.
 function safeCopyLockedFile(src, dst) {
   if (process.platform !== 'win32') {
     fs.copyFileSync(src, dst); // advisory locks on macOS/Linux — plain copy works
     return;
   }
+
+  const safeSrc = src.replace(/'/g, "''");
+  const safeDst = dst.replace(/'/g, "''");
   const scriptFile = path.join(app.getPath('temp'), '_claude_copy.ps1');
+
   try {
     fs.writeFileSync(scriptFile, [
-      `$src = '${src.replace(/'/g, "''")}'`,
-      `$dst = '${dst.replace(/'/g, "''")}'`,
-      '$fs = [System.IO.File]::Open($src, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)',
-      '$fd = [System.IO.File]::Create($dst)',
-      '$fs.CopyTo($fd)',
-      '$fs.Dispose()',
-      '$fd.Dispose()',
+      '$ErrorActionPreference = "Stop"',
+      "Add-Type -TypeDefinition @'",
+      'using System;',
+      'using System.IO;',
+      'using System.Runtime.InteropServices;',
+      'using Microsoft.Win32.SafeHandles;',
+      'public class ChromeCopier {',
+      '    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]',
+      '    static extern IntPtr CreateFile(',
+      '        string lpFileName, uint dwDesiredAccess, uint dwShareMode,',
+      '        IntPtr lpSecurityAttributes, uint dwCreationDisposition,',
+      '        uint dwFlagsAndAttributes, IntPtr hTemplateFile);',
+      '    public static void Copy(string src, string dst) {',
+      '        // GENERIC_READ | FILE_SHARE_READ|WRITE|DELETE | OPEN_EXISTING | FILE_FLAG_BACKUP_SEMANTICS',
+      '        IntPtr h = CreateFile(src, 0x80000000u, 7u, IntPtr.Zero, 3u, 0x02000000u, IntPtr.Zero);',
+      '        if (h == new IntPtr(-1))',
+      '            throw new Exception("Win32 error " + Marshal.GetLastWin32Error() + " opening Cookies file.");',
+      '        using (var fs = new FileStream(new SafeFileHandle(h, true), FileAccess.Read))',
+      '        using (var fd = File.Create(dst)) { fs.CopyTo(fd); }',
+      '    }',
+      '}',
+      "'@",
+      `[ChromeCopier]::Copy('${safeSrc}', '${safeDst}')`,
     ].join('\r\n'), 'utf8');
+
     execSync(
       `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptFile}"`,
       { encoding: 'utf8' }
+    );
+  } catch (e) {
+    const detail = ((e.stderr || '') + (e.stdout || '') + e.message).toString().trim();
+    // Surface a clear, actionable message in the picker UI
+    throw new Error(
+      detail.includes('Win32') || detail.includes('being used') || detail.includes('error 32')
+        ? 'Chrome has the Cookies file locked. Close Chrome and try again, or use "Sign in Fresh".'
+        : `Failed to copy Chrome cookies: ${detail.slice(0, 300)}`
     );
   } finally {
     try { fs.unlinkSync(scriptFile); } catch {}
