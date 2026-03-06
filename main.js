@@ -4,23 +4,27 @@ const {
   app, BrowserWindow, Tray, Menu, nativeImage,
   ipcMain, net, screen: electronScreen, session: electronSession,
 } = require('electron');
-const path = require('path');
-const fs   = require('fs');
-const zlib = require('zlib');
+const path       = require('path');
+const fs         = require('fs');
+const zlib       = require('zlib');
+const crypto     = require('crypto');
+const { execSync } = require('child_process');
 
 // ── Single instance ───────────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) { app.quit(); }
-app.on('second-instance', () => { loginWindow?.focus(); });
+app.on('second-instance', () => { (loginWindow ?? pickerWindow)?.focus(); });
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let tray        = null;
-let loginWindow = null;
-let popupWindow = null;
-let pollTimer   = null;
-let orgId       = null;
-let usageData   = null;
+let tray         = null;
+let loginWindow  = null;
+let popupWindow  = null;
+let pickerWindow = null;
+let pollTimer    = null;
+let orgId        = null;
+let usageData    = null;
+let sqlLib       = null; // lazy-loaded on first Chrome import
 
-const POLL_MS    = 60 * 60 * 1000; // 1 hour
+const POLL_MS     = 60 * 60 * 1000;
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -48,12 +52,10 @@ function pngChunk(type, data) {
   return Buffer.concat([len, t, data, crc]);
 }
 
-// Generates a solid-colour circle PNG with alpha (RGBA, colour type 6)
 function makeCirclePNG(size, r, g, b) {
   const sig  = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
+  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
   ihdr[8] = 8; ihdr[9] = 6; // 8-bit RGBA
 
   const cx = size / 2, cy = size / 2, radius = size / 2 - 0.5;
@@ -61,7 +63,7 @@ function makeCirclePNG(size, r, g, b) {
   const raw = Buffer.alloc(size * rowLen, 0);
 
   for (let y = 0; y < size; y++) {
-    raw[y * rowLen] = 0; // filter: None
+    raw[y * rowLen] = 0;
     for (let x = 0; x < size; x++) {
       const dx = x - cx + 0.5, dy = y - cy + 0.5;
       const a  = Math.sqrt(dx * dx + dy * dy) <= radius ? 255 : 0;
@@ -80,14 +82,14 @@ function makeCirclePNG(size, r, g, b) {
 
 function iconForPct(pct) {
   let r, g, b;
-  if      (pct == null) { r = 74;  g = 144; b = 226; } // blue  — unknown
-  else if (pct  <  50)  { r = 39;  g = 174; b = 96;  } // green
-  else if (pct  <  80)  { r = 230; g = 126; b = 34;  } // orange
-  else                  { r = 231; g = 76;  b = 60;  } // red
+  if      (pct == null) { r = 74;  g = 144; b = 226; }
+  else if (pct  <  50)  { r = 39;  g = 174; b = 96;  }
+  else if (pct  <  80)  { r = 230; g = 126; b = 34;  }
+  else                  { r = 231; g = 76;  b = 60;  }
   return nativeImage.createFromBuffer(makeCirclePNG(22, r, g, b));
 }
 
-// ── Claude API (uses the login session's cookies automatically) ───────────────
+// ── Claude API ────────────────────────────────────────────────────────────────
 function claudeGet(url) {
   return new Promise((resolve, reject) => {
     const req = net.request({ method: 'GET', url, session: electronSession.defaultSession });
@@ -97,8 +99,8 @@ function claudeGet(url) {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
     let body = '';
     req.on('response', (res) => {
-      res.on('data',  (c) => { body += c; });
-      res.on('end',   ()  => resolve({ status: res.statusCode, body }));
+      res.on('data', (c) => { body += c; });
+      res.on('end',  ()  => resolve({ status: res.statusCode, body }));
     });
     req.on('error', reject);
     req.end();
@@ -135,6 +137,159 @@ async function fetchUsage() {
   return JSON.parse(body);
 }
 
+// ── Chrome profile helpers ────────────────────────────────────────────────────
+function getChromeDataDir() {
+  if (process.platform === 'win32')
+    return path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'User Data');
+  if (process.platform === 'darwin')
+    return path.join(process.env.HOME || '', 'Library', 'Application Support', 'Google', 'Chrome');
+  return path.join(process.env.HOME || '', '.config', 'google-chrome');
+}
+
+function chromeCookiesPath(dataDir, profileDir) {
+  // Chrome 96+ moved cookies to a Network subfolder
+  const network = path.join(dataDir, profileDir, 'Network', 'Cookies');
+  if (fs.existsSync(network)) return network;
+  const legacy  = path.join(dataDir, profileDir, 'Cookies');
+  if (fs.existsSync(legacy))  return legacy;
+  return null;
+}
+
+function listChromeProfiles() {
+  const dataDir = getChromeDataDir();
+  try {
+    const state = JSON.parse(fs.readFileSync(path.join(dataDir, 'Local State'), 'utf8'));
+    const cache = state?.profile?.info_cache ?? {};
+    return Object.entries(cache)
+      .map(([dir, info]) => ({ dir, name: info.name || dir, email: info.user_name || '' }))
+      .filter(p => !!chromeCookiesPath(dataDir, p.dir));
+  } catch {
+    return [];
+  }
+}
+
+// Returns the AES key Chrome uses to encrypt cookies (platform-specific)
+function getChromeAesKey() {
+  const dataDir = getChromeDataDir();
+
+  if (process.platform === 'win32') {
+    const state  = JSON.parse(fs.readFileSync(path.join(dataDir, 'Local State'), 'utf8'));
+    const encB64 = state?.os_crypt?.encrypted_key;
+    if (!encB64) throw new Error('No os_crypt.encrypted_key in Chrome Local State');
+
+    // Strip the literal 'DPAPI' prefix (5 bytes), then decrypt the rest with Windows DPAPI
+    const encrypted  = Buffer.from(encB64, 'base64').slice(5);
+    const scriptFile = path.join(app.getPath('temp'), '_claude_dpapi.ps1');
+    try {
+      fs.writeFileSync(scriptFile, [
+        'Add-Type -AssemblyName System.Security',
+        `$enc = [System.Convert]::FromBase64String('${encrypted.toString('base64')}')`,
+        '$dec = [System.Security.Cryptography.ProtectedData]::Unprotect($enc, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
+        '[System.Console]::WriteLine([System.Convert]::ToBase64String($dec))',
+      ].join('\r\n'), 'utf8');
+      const out = execSync(
+        `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptFile}"`,
+        { encoding: 'utf8' }
+      ).trim();
+      return Buffer.from(out, 'base64');
+    } finally {
+      try { fs.unlinkSync(scriptFile); } catch {}
+    }
+  }
+
+  if (process.platform === 'darwin') {
+    const pw = execSync(
+      'security find-generic-password -a "Chrome" -s "Chrome Safe Storage" -w',
+      { encoding: 'utf8' }
+    ).trim();
+    return crypto.pbkdf2Sync(pw, 'saltysalt', 1003, 16, 'sha1');
+  }
+
+  throw new Error(`Chrome cookie import not yet supported on ${process.platform}`);
+}
+
+function decryptChromeValue(buf, aesKey) {
+  if (!buf || buf.length < 4) return '';
+  const prefix = buf.slice(0, 3).toString();
+  if (prefix !== 'v10' && prefix !== 'v11') return ''; // pre-v80 DPAPI-only, skip
+
+  try {
+    if (process.platform === 'win32') {
+      // AES-256-GCM: [3 prefix][12 nonce][ciphertext][16 tag]
+      const nonce = buf.slice(3, 15);
+      const tag   = buf.slice(buf.length - 16);
+      const ct    = buf.slice(15, buf.length - 16);
+      const dec   = crypto.createDecipheriv('aes-256-gcm', aesKey, nonce);
+      dec.setAuthTag(tag);
+      return Buffer.concat([dec.update(ct), dec.final()]).toString('utf8');
+    }
+    if (process.platform === 'darwin') {
+      // AES-128-CBC: [3 prefix][ciphertext], IV = 16 space chars
+      const dec = crypto.createDecipheriv('aes-128-cbc', aesKey, Buffer.alloc(16, 0x20));
+      return Buffer.concat([dec.update(buf.slice(3)), dec.final()]).toString('utf8');
+    }
+  } catch {}
+  return '';
+}
+
+async function importChromeProfile(profileDir) {
+  const dataDir    = getChromeDataDir();
+  const cookiesFile = chromeCookiesPath(dataDir, profileDir);
+  if (!cookiesFile) throw new Error('No Cookies file found for this profile');
+
+  // Copy to avoid lock contention if Chrome is running
+  const tmpFile = path.join(app.getPath('temp'), '_claude_cookies_tmp.db');
+  fs.copyFileSync(cookiesFile, tmpFile);
+
+  let imported = 0;
+  try {
+    if (!sqlLib) {
+      const initSql = require('sql.js');
+      sqlLib = await initSql({
+        locateFile: f => path.join(__dirname, 'node_modules', 'sql.js', 'dist', f),
+      });
+    }
+
+    const aesKey = getChromeAesKey();
+    const db     = new sqlLib.Database(fs.readFileSync(tmpFile));
+    const res    = db.exec(
+      `SELECT name, value, encrypted_value, host_key, path, is_secure, is_httponly, expires_utc
+       FROM cookies WHERE host_key LIKE '%claude.ai%'`
+    );
+    db.close();
+
+    if (!res.length) return 0;
+
+    const cols = res[0].columns;
+    for (const row of res[0].values) {
+      const c   = Object.fromEntries(cols.map((k, i) => [k, row[i]]));
+      const val = c.value || decryptChromeValue(c.encrypted_value, aesKey);
+      if (!val) continue;
+
+      // Chrome stores expiry as µs since 1601-01-01 (Windows FILETIME epoch)
+      const exp = c.expires_utc ? (c.expires_utc / 1e6) - 11644473600 : undefined;
+      try {
+        await electronSession.defaultSession.cookies.set({
+          url:      'https://claude.ai',
+          name:     c.name,
+          value:    val,
+          domain:   c.host_key,
+          path:     c.path || '/',
+          secure:   !!c.is_secure,
+          httpOnly: !!c.is_httponly,
+          ...(exp && exp > 0 ? { expirationDate: exp } : {}),
+        });
+        imported++;
+      } catch (e) {
+        console.warn(`Cookie ${c.name}: ${e.message}`);
+      }
+    }
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch {}
+  }
+  return imported;
+}
+
 // ── Login window ──────────────────────────────────────────────────────────────
 function showLoginWindow() {
   if (loginWindow && !loginWindow.isDestroyed()) { loginWindow.focus(); return; }
@@ -147,11 +302,19 @@ function showLoginWindow() {
 
   loginWindow.loadURL('https://claude.ai/login');
 
-  // Watch for navigation away from auth pages — that signals a successful login
+  // Allow Google OAuth popups (window.open calls) to open inside Electron
+  loginWindow.webContents.setWindowOpenHandler(({ url }) => ({
+    action: 'allow',
+    overrideBrowserWindowOptions: {
+      parent: loginWindow,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    },
+  }));
+
   loginWindow.webContents.on('did-navigate', (_, url) => {
     const isAuthPage = /\/(login|auth|sso|sign-?in)/i.test(url);
     if (url.includes('claude.ai') && !isAuthPage) {
-      setTimeout(tryAutoDetectLogin, 1500); // give cookies time to settle
+      setTimeout(tryAutoDetectLogin, 1500);
     }
   });
 
@@ -160,15 +323,34 @@ function showLoginWindow() {
 
 async function tryAutoDetectLogin() {
   try {
-    orgId = null;               // force fresh org lookup with the new session
+    orgId = null;
     writeConfig({ orgId: null });
-    await resolveOrgId();       // throws if not actually logged in yet
+    await resolveOrgId();
     loginWindow?.close();
     await refresh();
     startPolling();
   } catch {
-    // Not fully logged in yet — keep waiting for the next navigation event
+    // Not fully logged in yet — keep waiting
   }
+}
+
+// ── Profile picker window ─────────────────────────────────────────────────────
+function showProfilePicker() {
+  if (pickerWindow && !pickerWindow.isDestroyed()) { pickerWindow.focus(); return; }
+
+  pickerWindow = new BrowserWindow({
+    width: 400, height: 460,
+    resizable: false,
+    title: 'Sign in to Claude',
+    webPreferences: {
+      preload:          path.join(__dirname, 'profile-preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+    },
+  });
+
+  pickerWindow.loadFile('profile-picker.html');
+  pickerWindow.on('closed', () => { pickerWindow = null; });
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
@@ -193,8 +375,7 @@ async function refresh() {
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {
   stopPolling();
-  orgId     = null;
-  usageData = null;
+  orgId = null; usageData = null;
   writeConfig({ orgId: null });
   popupWindow?.close();
 
@@ -207,7 +388,7 @@ async function logout() {
   showLoginWindow();
 }
 
-// ── Tray ──────────────────────────────────────────────────────────────────────
+// ── Usage parsing ─────────────────────────────────────────────────────────────
 function deepFind(obj, keys) {
   if (!obj || typeof obj !== 'object') return undefined;
   for (const k of keys) if (obj[k] !== undefined) return obj[k];
@@ -249,21 +430,16 @@ function buildTooltip() {
     const l = deepFind(usageData, ['weekly_messages_limit', 'weekly_limit', 'weekly_allowed']);
     if (u != null && l) weeklyPct = Math.round(u / l * 100);
   }
-  const sReset = deepFind(usageData, ['session_resets_at', 'session_reset_at', 'current_session_reset_at', 'resets_at']);
-  const wReset = deepFind(usageData, ['weekly_resets_at', 'weekly_reset_at', 'next_weekly_reset']);
+  const sR = deepFind(usageData, ['session_resets_at', 'session_reset_at', 'current_session_reset_at', 'resets_at']);
+  const wR = deepFind(usageData, ['weekly_resets_at', 'weekly_reset_at', 'next_weekly_reset']);
 
   const lines = [];
-  if (sessionPct != null) {
-    const r = sReset ? ` (resets ${formatTimeUntil(sReset)})` : '';
-    lines.push(`Session: ${sessionPct}%${r}`);
-  }
-  if (weeklyPct != null) {
-    const r = wReset ? ` (resets ${formatTimeUntil(wReset)})` : '';
-    lines.push(`Weekly: ${Math.round(weeklyPct)}%${r}`);
-  }
+  if (sessionPct != null) lines.push(`Session: ${sessionPct}%${sR ? ` (resets ${formatTimeUntil(sR)})` : ''}`);
+  if (weeklyPct  != null) lines.push(`Weekly: ${Math.round(weeklyPct)}%${wR ? ` (resets ${formatTimeUntil(wR)})` : ''}`);
   return lines.length ? lines.join('\n') : 'Claude Usage';
 }
 
+// ── Tray ──────────────────────────────────────────────────────────────────────
 function updateTray() {
   if (!tray) return;
   tray.setImage(iconForPct(parseSessionPct(usageData)));
@@ -274,37 +450,29 @@ function createTray() {
   tray = new Tray(iconForPct(null));
   tray.setToolTip('Claude Usage — Initializing...');
 
-  // Left-click: refresh immediately, then open popup
-  tray.on('click', async () => {
-    await refresh();
-    openPopup();
-  });
+  tray.on('click', async () => { await refresh(); openPopup(); });
 
-  // Right-click: context menu
   tray.on('right-click', () => {
-    const menu = Menu.buildFromTemplate([
-      { label: 'Show Usage',  click: openPopup },
-      { label: 'Refresh',     click: () => refresh() },
+    tray.popUpContextMenu(Menu.buildFromTemplate([
+      { label: 'Show Usage', click: openPopup },
+      { label: 'Refresh',    click: () => refresh() },
       { type: 'separator' },
-      { label: 'Log Out',     click: logout },
+      { label: 'Log Out',    click: logout },
       { type: 'separator' },
-      { label: 'Quit',        click: () => app.quit() },
-    ]);
-    tray.popUpContextMenu(menu);
+      { label: 'Quit',       click: () => app.quit() },
+    ]));
   });
 }
 
 // ── Popup window ──────────────────────────────────────────────────────────────
 function getPopupPosition() {
-  const { x: tx, y: ty, width: tw, height: th } = tray.getBounds();
+  const { x: tx, y: ty, width: tw } = tray.getBounds();
   const W = 320, H = 240;
   const display = electronScreen.getDisplayNearestPoint({ x: tx, y: ty });
   const { x: wx, y: wy, width: ww, height: wh } = display.workArea;
 
   let x = Math.round(tx + tw / 2 - W / 2);
   let y = Math.round(ty - H - 8);
-
-  // Clamp to work area (handles taskbars on any side)
   x = Math.max(wx, Math.min(x, wx + ww - W));
   y = Math.max(wy, Math.min(y, wy + wh - H));
   return { x, y, width: W, height: H };
@@ -316,14 +484,10 @@ function openPopup() {
   const bounds = getPopupPosition();
   popupWindow = new BrowserWindow({
     ...bounds,
-    frame:     false,
-    resizable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
+    frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true,
     webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration:  false,
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
     },
   });
 
@@ -333,15 +497,38 @@ function openPopup() {
 }
 
 function broadcastUsage() {
-  if (popupWindow && !popupWindow.isDestroyed()) {
+  if (popupWindow && !popupWindow.isDestroyed())
     popupWindow.webContents.send('usage-update', usageData);
-  }
 }
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
 ipcMain.handle('get-usage', () => usageData);
 ipcMain.handle('refresh',   async () => { await refresh(); return usageData; });
 ipcMain.on('close-popup',   () => popupWindow?.close());
+
+ipcMain.handle('get-chrome-profiles', () => listChromeProfiles());
+
+ipcMain.handle('import-chrome-profile', async (_, dir) => {
+  try {
+    const count = await importChromeProfile(dir);
+    if (count === 0) return { success: false, message: 'No Claude session found in this profile. Try signing in fresh.' };
+
+    orgId = null;
+    writeConfig({ orgId: null });
+    await resolveOrgId(); // verify cookies work before closing the picker
+    pickerWindow?.close();
+    await refresh();
+    startPolling();
+    return { success: true, count };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+});
+
+ipcMain.on('profile-picker:fresh-login', () => {
+  pickerWindow?.close();
+  showLoginWindow();
+});
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
@@ -355,11 +542,17 @@ app.whenReady().then(async () => {
     await resolveOrgId();
     await refresh();
     startPolling();
-  } catch {
+    return;
+  } catch {}
+
+  // No valid session — offer Chrome profile import if available, else fresh login
+  const profiles = listChromeProfiles();
+  if (profiles.length > 0) {
+    showProfilePicker();
+  } else {
     showLoginWindow();
   }
 });
 
-// Keep running in tray after all windows are closed
-app.on('window-all-closed', () => { /* intentionally empty */ });
+app.on('window-all-closed', () => { /* keep running in tray */ });
 app.on('before-quit', () => { stopPolling(); tray?.destroy(); });
