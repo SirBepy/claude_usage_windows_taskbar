@@ -131,17 +131,9 @@ async function refreshWithAnimation() {
 
 function buildContextMenu() {
   const { state, version } = getUpdateState();
-  const openAtLogin = app.getLoginItemSettings().openAtLogin;
 
   const template = [
     { label: "Refresh", click: () => refreshWithAnimation() },
-    { type: "separator" },
-    {
-      label: "Start on login",
-      type: "checkbox",
-      checked: openAtLogin,
-      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
-    },
     { type: "separator" },
     {
       label: "Settings",
@@ -332,3 +324,5 @@ app.on("before-quit", () => {
   stopPolling();
   tray?.destroy();
 });
+
+// TODO: Add support for macos (IGNORE THIS, THIS IS A BIG CHANGE)

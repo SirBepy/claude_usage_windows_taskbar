@@ -182,7 +182,6 @@ function drawSpinningArc(
  * Draws two vertical bars instead of rings.
  */
 function drawBars(pixels, sessionPct, weeklyPct, trackRGB) {
-  const [tr, tg, tb] = trackRGB;
   const sessionRGB = urgencyRGB(sessionPct);
   const weeklyRGB = urgencyRGB(weeklyPct);
 
@@ -198,7 +197,7 @@ function drawBars(pixels, sessionPct, weeklyPct, trackRGB) {
       // Session bar (Left: x 3-8, y 2-20)
       if (x >= 3 && x <= 8 && y >= 2 && y <= 20) {
         const isFilled = 20 - y <= sessionFill;
-        const [r, g, b] = isFilled ? sessionRGB : tr;
+        const [r, g, b] = isFilled ? sessionRGB : trackRGB;
         const alpha = isFilled ? 255 : 80;
 
         pixels[idx] = r;
@@ -210,7 +209,7 @@ function drawBars(pixels, sessionPct, weeklyPct, trackRGB) {
       // Weekly bar (Right: x 13-18, y 2-20)
       if (x >= 13 && x <= 18 && y >= 2 && y <= 20) {
         const isFilled = 20 - y <= weeklyFill;
-        const [r, g, b] = isFilled ? weeklyRGB : tr;
+        const [r, g, b] = isFilled ? weeklyRGB : trackRGB;
         const alpha = isFilled ? 255 : 80;
 
         pixels[idx] = r;
