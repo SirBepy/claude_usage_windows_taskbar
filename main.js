@@ -189,7 +189,7 @@ function showLoginWindow() {
     width: 1024,
     height: 768,
     title: "Sign in to Claude",
-    icon: path.join(__dirname, "src/icon.svg"),
+    icon: path.join(__dirname, "src/icon.png"),
     autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
@@ -261,7 +261,7 @@ function showSettingsWindow() {
     width: 400,
     height: 550,
     title: "Settings",
-    icon: path.join(__dirname, "src/icon.svg"),
+    icon: path.join(__dirname, "src/icon.png"),
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: {
