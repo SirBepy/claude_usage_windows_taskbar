@@ -1,8 +1,8 @@
 # Claude AI Usage Toolbar
 
 A Windows system tray app that monitors your Claude AI session usage in real time.
-It polls the Claude web API every hour and shows a color-coded tray icon so you
-always know how much of your session allowance you've used.
+It scrapes the Claude usage page once per hour and shows a dual progress-ring icon
+so you always know how much of your session and weekly allowance you've used.
 
 ## Requirements
 
@@ -44,38 +44,47 @@ step entirely.
 
 ## Tray icon
 
-The tray icon is a colored circle that reflects your current session usage:
+The icon is a 22×22 dual progress ring generated entirely at runtime (no image files):
 
-| Color  | Meaning              |
-|--------|----------------------|
-| Blue   | Loading / unknown    |
-| Green  | < 50% used           |
-| Orange | 50–80% used          |
-| Red    | > 80% used           |
+- **Outer ring** — session (5-hour window) utilisation
+- **Inner ring** — weekly (7-day window) utilisation
 
-Click the tray icon to open the usage detail popup.
+Each ring is coloured independently:
 
-## Usage popup
+| Color  | Meaning     |
+|--------|-------------|
+| Blue   | Loading / unknown |
+| Green  | < 50% used  |
+| Orange | 50–80% used |
+| Red    | > 80% used  |
 
-The popup shows your current session usage breakdown pulled from the Claude API.
-If the API response format changes and usage fields can't be parsed, the raw JSON
-is displayed so you can identify the new field names.
+**Left-click** the icon to manually trigger a refresh. The outer ring animates with
+a spinning blue arc while the fetch is in progress, then snaps back to real data.
+
+**Hover** over the icon to see a tooltip with exact percentages and reset times for
+both the session and weekly windows.
+
+**Right-click** for a context menu with Refresh, Log Out, and Quit.
 
 ## How it works
 
-- All API requests reuse the Electron session cookies — no API key or token needed.
-- Usage is polled once per hour automatically.
-- Your org ID is cached in `config.json` (inside Electron's `userData` folder) to
-  avoid an extra API round-trip on each startup.
-- If the app receives a 401/403 from the API it clears the session and shows the
-  login window again.
+Usage is fetched by loading `https://claude.ai/settings/usage` in a hidden Electron
+window and intercepting the `/api/organizations/.../usage` network response via the
+Chrome DevTools Protocol (CDP Fetch domain). The page handles authentication using
+the stored session cookies — no API key, token, or manual auth headers needed.
+
+Data is polled automatically once per hour, or on demand by clicking the icon.
+A 401/403 response clears the session and shows the login window again.
 
 ## Project structure
 
-| File | Role |
+| Path | Role |
 |---|---|
-| `main.js` | All app logic: tray, polling, API calls, Chrome import, IPC handlers |
-| `preload.js` | Exposes `window.electronAPI` to the usage popup |
+| `main.js` | App lifecycle, tray, windows, polling, IPC |
+| `src/icon.js` | Runtime PNG generation — dual progress ring + spin animation |
+| `src/usage-parser.js` | Parses the usage API response into percentages and reset times |
+| `src/scraper.js` | Loads the usage page in a hidden window, intercepts the API call via CDP |
+| `src/session.js` | Cookie helpers (`clearClaudeCookies`) |
+| `src/chrome-import.js` | Chrome cookie import — locked-file copy, DPAPI decryption, sql.js |
 | `profile-preload.js` | Exposes `window.profileAPI` to the profile picker |
-| `popup.html` | Frameless usage detail window (opens above tray on click) |
 | `profile-picker.html` | Chrome profile selection window shown on first launch |
