@@ -4,6 +4,8 @@ const { app, BrowserWindow, Tray, Menu, ipcMain } = require("electron");
 const path = require("path");
 const http = require("http");
 
+app.name = "Claude Usage Taskbar Tool";
+
 // ── Hook server (Claude Code Stop hook → POST /refresh) ───────────────────────
 const HOOK_SERVER_PORT = 27182;
 const hookServer = http.createServer((req, res) => {
@@ -187,6 +189,7 @@ function showLoginWindow() {
     width: 1024,
     height: 768,
     title: "Sign in to Claude",
+    icon: path.join(__dirname, "src/icon.svg"),
     autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
@@ -258,6 +261,7 @@ function showSettingsWindow() {
     width: 400,
     height: 500,
     title: "Settings",
+    icon: path.join(__dirname, "src/icon.svg"),
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -295,7 +299,7 @@ async function logout() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   if (process.platform === "darwin") app.dock.hide();
-  app.setAppUserModelId("com.aiusage.toolbar");
+  app.setAppUserModelId("Claude Usage Taskbar Tool");
 
   createTray();
   setupAutoUpdater(() => {

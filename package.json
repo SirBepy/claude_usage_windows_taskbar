@@ -1,5 +1,5 @@
 {
-  "name": "ai-usage-toolbar",
+  "name": "claude-usage-taskbar-tool",
   "version": "1.0.0",
   "description": "System tray app to monitor Claude AI usage",
   "main": "main.js",
@@ -20,14 +20,14 @@
   },
   "build": {
     "appId": "com.aiusage.toolbar",
-    "productName": "AI Usage Toolbar",
+    "productName": "Claude Usage Taskbar Tool",
     "win": {
       "target": "nsis"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "shortcutName": "AI Usage Toolbar"
+      "shortcutName": "Claude Usage Taskbar Tool"
     },
     "publish": {
       "provider": "github",
