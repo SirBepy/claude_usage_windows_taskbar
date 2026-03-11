@@ -6,6 +6,9 @@ const http = require("http");
 
 app.name = "Claude Usage Taskbar Tool";
 
+// Disable hardware acceleration to save memory (prevents the GPU-process from spawning)
+app.disableHardwareAcceleration();
+
 // ── Hook server (Claude Code Stop hook → POST /refresh) ───────────────────────
 const HOOK_SERVER_PORT = 27182;
 const hookServer = http.createServer((req, res) => {
