@@ -1,10 +1,17 @@
 "use strict";
 
-function formatResetAt(iso) {
+function formatResetAt(iso, style = "absolute") {
   if (!iso) return null;
   const resetDate = new Date(iso);
   const diff = resetDate - Date.now();
   if (diff <= 0) return "soon";
+
+  if (style === "countdown") {
+    const hours = Math.floor(diff / 3600000);
+    const mins = Math.round((diff % 3600000) / 60000);
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  }
 
   const hh = resetDate.getHours().toString().padStart(2, "0");
   const mm = resetDate.getMinutes().toString().padStart(2, "0");
@@ -31,15 +38,16 @@ function parseWeeklyPct(data) {
 }
 
 /** Builds the tray tooltip string from usage API data. */
-function buildTooltip(data) {
+function buildTooltip(data, settings = {}) {
   if (!data) return "Claude Usage — Loading...";
 
   const lines = [];
+  const style = settings.timeStyle || "absolute";
 
   const session = data.five_hour;
   if (session?.utilization != null) {
     const reset = session.resets_at
-      ? ` - ${formatResetAt(session.resets_at)}`
+      ? ` - ${formatResetAt(session.resets_at, style)}`
       : "";
     lines.push(`Session: ${session.utilization}%${reset}`);
   }
@@ -47,7 +55,7 @@ function buildTooltip(data) {
   const weekly = data.seven_day;
   if (weekly?.utilization != null) {
     const reset = weekly.resets_at
-      ? ` - ${formatResetAt(weekly.resets_at)}`
+      ? ` - ${formatResetAt(weekly.resets_at, style)}`
       : "";
     lines.push(`Weekly:  ${weekly.utilization}%${reset}`);
   }

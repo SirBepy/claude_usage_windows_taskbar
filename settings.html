@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - AI Usage</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --primary: #4a90e2;
+            --text: #e0e0e0;
+            --text-dim: #999;
+            --border: #333;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            user-select: none;
+        }
+        h2 { font-weight: 500; margin-bottom: 20px; font-size: 1.2rem; }
+        .section {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+        }
+        .section-title {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .option:last-child { margin-bottom: 0; }
+        .option-label { font-size: 0.95rem; }
+        
+        select {
+            background: #2a2a2a;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 4px 8px;
+            border-radius: 4px;
+            outline: none;
+        }
+        select:focus { border-color: var(--primary); }
+
+        .footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #357abd; }
+        .btn-secondary { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #2a2a2a; }
+
+        label.switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px; width: 16px;
+            left: 2px; bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(14px); }
+    </style>
+</head>
+<body>
+    <h2>Settings</h2>
+    
+    <div class="section">
+        <div class="section-title">Visuals</div>
+        <div class="option">
+            <span class="option-label">Icon Style</span>
+            <select id="iconStyle">
+                <option value="rings">Rings</option>
+                <option value="bars">Progress Bars</option>
+            </select>
+        </div>
+        <div class="option">
+            <span class="option-label">Time Display</span>
+            <select id="timeStyle">
+                <option value="absolute">Absolute Time</option>
+                <option value="countdown">Time Until</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">General</div>
+        <div class="option">
+            <span class="option-label">Launch at Login</span>
+            <label class="switch">
+                <input type="checkbox" id="launchAtLogin">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <div class="footer">
+        <button class="btn-secondary" id="cancelBtn">Cancel</button>
+        <button class="btn-primary" id="saveBtn">Save Settings</button>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        // Elements
+        const iconStyle = document.getElementById('iconStyle');
+        const timeStyle = document.getElementById('timeStyle');
+        const launchAtLogin = document.getElementById('launchAtLogin');
+        const saveBtn = document.getElementById('saveBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+
+        // Load settings
+        window.onload = async () => {
+            const settings = await ipcRenderer.invoke('get-settings');
+            iconStyle.value = settings.iconStyle || 'rings';
+            timeStyle.value = settings.timeStyle || 'absolute';
+            launchAtLogin.checked = settings.launchAtLogin || false;
+        };
+
+        // Save settings
+        saveBtn.onclick = () => {
+            const settings = {
+                iconStyle: iconStyle.value,
+                timeStyle: timeStyle.value,
+                launchAtLogin: launchAtLogin.checked
+            };
+            ipcRenderer.send('save-settings', settings);
+            window.close();
+        };
+
+        // Cancel
+        cancelBtn.onclick = () => {
+            window.close();
+        };
+    </script>
+</body>
+</html>

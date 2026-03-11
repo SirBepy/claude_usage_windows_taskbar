@@ -24,6 +24,7 @@ const {
 } = require("./src/usage-parser");
 const { fetchUsageFromPage } = require("./src/scraper");
 const { clearClaudeCookies } = require("./src/session");
+const { loadSettings, saveSettings } = require("./src/settings");
 const {
   setupAutoUpdater,
   getUpdateState,
@@ -45,6 +46,9 @@ let pollTimer = null;
 let spinTimer = null;
 let usageData = null;
 let loggedIn = false;
+let settingsVisible = false;
+let settingsWindow = null;
+let settings = loadSettings();
 
 const POLL_MS = 60 * 60 * 1000;
 
@@ -98,7 +102,7 @@ function updateTray() {
   tray.setImage(
     makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData)),
   );
-  tray.setToolTip(buildTooltip(usageData));
+  tray.setToolTip(buildTooltip(usageData, settings));
 }
 
 /**
@@ -137,6 +141,11 @@ function buildContextMenu() {
       type: "checkbox",
       checked: openAtLogin,
       click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+    },
+    { type: "separator" },
+    {
+      label: "Settings",
+      click: showSettingsWindow,
     },
     { type: "separator" },
     loggedIn
@@ -244,6 +253,42 @@ function showLoginWindow() {
     loginWindow = null;
   });
 }
+
+// ── Settings window ───────────────────────────────────────────────────────────
+function showSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 400,
+    height: 500,
+    title: "Settings",
+    resizable: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false, // For simplicity in settings.html
+    },
+  });
+
+  settingsWindow.setMenuBarVisibility(false);
+  settingsWindow.loadFile("settings.html");
+
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+}
+
+// ── IPC ───────────────────────────────────────────────────────────────────────
+ipcMain.handle("get-settings", () => settings);
+ipcMain.on("save-settings", (_, newSettings) => {
+  settings = newSettings;
+  saveSettings(settings);
+  updateTray(); // in case icon style changed
+});
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {
