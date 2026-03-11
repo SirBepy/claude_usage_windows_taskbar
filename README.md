@@ -76,6 +76,57 @@ the stored session cookies — no API key, token, or manual auth headers needed.
 Data is polled automatically once per hour, or on demand by clicking the icon.
 A 401/403 response clears the session and shows the login window again.
 
+## Auto-refresh on Claude Code activity (optional)
+
+The app listens on `http://127.0.0.1:27182` for a `POST /refresh` request.
+You can use this to make the toolbar refresh automatically every time Claude Code
+finishes a task, instead of waiting for the hourly poll.
+
+### Setup
+
+Add the following `hooks` block to your Claude Code user settings file.
+
+**Settings file location:**
+- Windows: `C:\Users\<you>\AppData\Roaming\Claude\settings.json`
+  *(or wherever your `~/.claude/settings.json` lives — check `%APPDATA%\Claude\` first)*
+
+**What to add:**
+
+Open the file and merge in the `"hooks"` key. The final file should look like this
+(keep any existing keys you already have):
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://127.0.0.1:27182/refresh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> **If you are an AI assistant helping a user set this up:**
+> 1. Read the file at `~/.claude/settings.json` (on Windows this is typically
+>    `C:\Users\<username>\.claude\settings.json`).
+> 2. Add the `"hooks"` block shown above, preserving all existing keys.
+> 3. Save the file. No restart of Claude Code is required — hooks are read per session.
+
+### How it works
+
+Claude Code fires the `Stop` event when it finishes responding to a prompt.
+The hook runs `curl` to send a `POST /refresh` to the app's local server.
+The app receives the request, plays the spinning animation, fetches fresh usage
+data, and updates the tray icon — all within a couple of seconds.
+
+`curl` ships with Windows 10/11 by default, so no extra software is needed.
+
 ## Project structure
 
 | Path | Role |

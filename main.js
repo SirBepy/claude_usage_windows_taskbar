@@ -8,6 +8,19 @@ const {
   ipcMain,
 } = require("electron");
 const path = require("path");
+const http = require("http");
+
+// ── Hook server (Claude Code Stop hook → POST /refresh) ───────────────────────
+const HOOK_SERVER_PORT = 27182;
+const hookServer = http.createServer((req, res) => {
+  if (req.method === "POST" && req.url === "/refresh") {
+    res.writeHead(204).end();
+    refreshWithAnimation().catch(console.error);
+  } else {
+    res.writeHead(404).end();
+  }
+});
+hookServer.listen(HOOK_SERVER_PORT, "127.0.0.1");
 
 const { makeIcon, makeSpinFrame } = require("./src/icon");
 const { parseSessionPct, parseWeeklyPct, buildTooltip } = require("./src/usage-parser");
