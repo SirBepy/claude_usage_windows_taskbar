@@ -42,10 +42,6 @@ function fetchUsageFromPage() {
       }
     });
 
-    win.webContents.on("did-navigate-in-page", (_, url) => {
-      console.log(`[scraper] did-navigate-in-page → ${url}`);
-    });
-
     try {
       win.webContents.debugger.attach("1.3");
     } catch (e) {
@@ -54,46 +50,53 @@ function fetchUsageFromPage() {
       return;
     }
 
-    // .catch() is required — when settle() destroys the window, any in-flight
-    // CDP commands reject with "target closed"; without a handler that becomes
-    // an UnhandledPromiseRejectionWarning.
-    win.webContents.debugger.sendCommand("Network.enable").catch(e => {
-      console.error("[scraper] Network.enable failed:", e.message);
+    // Use the Fetch domain (not Network) so the response is paused before the
+    // page consumes it — this guarantees Fetch.getResponseBody always succeeds.
+    // .catch() is required: when settle() destroys the window, any in-flight
+    // CDP commands reject with "target closed", which would be unhandled otherwise.
+    win.webContents.debugger.sendCommand("Fetch.enable", {
+      patterns: [{ urlPattern: "*/api/organizations/*/usage", requestStage: "Response" }],
+    }).catch(e => {
+      console.error("[scraper] Fetch.enable failed:", e.message);
     });
 
     win.webContents.debugger.on("message", async (_, method, params) => {
-      // Log every network response to see what the page loads.
-      if (method === "Network.responseReceived") {
-        console.log(`[scraper] network ${params.response.status} ${params.response.url}`);
-      }
-
       if (settled) return;
-      if (method !== "Network.responseReceived") return;
+      if (method !== "Fetch.requestPaused") return;
 
-      const url = params.response.url;
-      if (!url.includes("/api/organizations/") || !url.includes("/usage")) return;
+      const url = params.request.url;
+      const status = params.responseStatusCode;
+      console.log(`[scraper] ${status} ${url}`);
 
-      const status = params.response.status;
-      console.log(`[scraper] >>> matched usage endpoint: ${status} ${url}`);
+      // Always continue the request so the page doesn't hang, regardless of outcome.
+      const continueRequest = () =>
+        win.webContents.debugger.sendCommand("Fetch.continueRequest", {
+          requestId: params.requestId,
+        }).catch(() => {});
 
       if (status === 401 || status === 403) {
+        await continueRequest();
         settle(() => reject(new Error(`HTTP ${status}`)));
         return;
       }
 
       if (status === 200) {
         try {
-          const { body } = await win.webContents.debugger.sendCommand(
-            "Network.getResponseBody",
+          const { body, base64Encoded } = await win.webContents.debugger.sendCommand(
+            "Fetch.getResponseBody",
             { requestId: params.requestId },
           );
-          const parsed = JSON.parse(body);
-          console.log("[scraper] usage response:\n" + JSON.stringify(parsed, null, 2));
+          await continueRequest();
+          const text = base64Encoded ? Buffer.from(body, "base64").toString() : body;
+          const parsed = JSON.parse(text);
           settle(() => resolve(parsed));
         } catch (e) {
           console.error("[scraper] getResponseBody failed:", e.message);
+          await continueRequest();
           settle(() => reject(e));
         }
+      } else {
+        await continueRequest();
       }
     });
 

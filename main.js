@@ -10,8 +10,8 @@ const {
 } = require("electron");
 const path = require("path");
 
-const { iconForPct } = require("./src/icon");
-const { parseSessionPct, buildTooltip } = require("./src/usage-parser");
+const { makeIcon } = require("./src/icon");
+const { parseSessionPct, parseWeeklyPct, buildTooltip } = require("./src/usage-parser");
 const { fetchUsageFromPage } = require("./src/scraper");
 const { clearClaudeCookies } = require("./src/session");
 const { listChromeProfiles, importChromeProfile } = require("./src/chrome-import");
@@ -80,12 +80,12 @@ async function refresh() {
 // ── Tray ──────────────────────────────────────────────────────────────────────
 function updateTray() {
   if (!tray) return;
-  tray.setImage(iconForPct(parseSessionPct(usageData)));
+  tray.setImage(makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData)));
   tray.setToolTip(buildTooltip(usageData));
 }
 
 function createTray() {
-  tray = new Tray(iconForPct(null));
+  tray = new Tray(makeIcon(null, null));
   tray.setToolTip("Claude Usage — Initializing...");
 
   tray.on("click", async () => {
