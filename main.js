@@ -331,5 +331,3 @@ app.on("before-quit", () => {
   stopPolling();
   tray?.destroy();
 });
-
-// TODO: Add support for macos (IGNORE THIS, THIS IS A BIG CHANGE)

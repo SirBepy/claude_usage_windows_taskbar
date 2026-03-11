@@ -24,6 +24,13 @@
     "win": {
       "target": "nsis"
     },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities"
+    },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
