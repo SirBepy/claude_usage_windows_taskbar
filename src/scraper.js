@@ -16,7 +16,14 @@ function fetchUsageFromPage() {
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
       show: false,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      title: "Claude Usage Scraper",
+      icon: require("path").join(__dirname, "..", "src", "icon.png"),
+      skipTaskbar: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
     });
 
     let settled = false;

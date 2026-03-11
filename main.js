@@ -192,9 +192,13 @@ function showLoginWindow() {
     width: 1024,
     height: 768,
     title: "Sign in to Claude",
-    icon: path.join(__dirname, "src/icon.png"),
+    icon: path.join(__dirname, "src", "icon.png"),
     autoHideMenuBar: true,
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
   });
   loginWindow.setMenuBarVisibility(false);
 
@@ -264,12 +268,14 @@ function showSettingsWindow() {
     width: 400,
     height: 550,
     title: "Settings",
-    icon: path.join(__dirname, "src/icon.png"),
+    icon: path.join(__dirname, "src", "icon.png"),
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false, // For simplicity in settings.html
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 

@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - AI Usage</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
     <style>
         :root {
             --bg: #121212;
@@ -211,7 +212,7 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        const { electronAPI } = window;
 
         // Elements
         const iconStyle = document.getElementById('iconStyle');
@@ -226,15 +227,15 @@
 
         // Load settings
         window.onload = async () => {
-            const settings = await ipcRenderer.invoke('get-settings');
+            const settings = await electronAPI.getSettings();
             iconStyle.value = settings.iconStyle || 'rings';
             timeStyle.value = settings.timeStyle || 'absolute';
             launchAtLogin.checked = settings.launchAtLogin || false;
 
-            const version = await ipcRenderer.invoke('get-app-version');
+            const version = await electronAPI.getAppVersion();
             appVersionLabel.innerText = `Version: ${version}`;
 
-            const updateState = await ipcRenderer.invoke('get-update-state');
+            const updateState = await electronAPI.getUpdateState();
             if (updateState.state === 'downloaded') {
                 updateStateLabel.innerText = 'Update ready to install';
                 updateBtn.style.display = 'block';
@@ -247,7 +248,7 @@
         };
 
         updateBtn.onclick = () => {
-            ipcRenderer.send('install-update');
+            electronAPI.installUpdate();
         };
 
         // Save settings
@@ -257,7 +258,7 @@
                 timeStyle: timeStyle.value,
                 launchAtLogin: launchAtLogin.checked
             };
-            ipcRenderer.send('save-settings', settings);
+            electronAPI.saveSettings(settings);
             window.close();
         };
 

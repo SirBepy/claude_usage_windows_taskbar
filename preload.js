@@ -7,10 +7,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   refresh: () => ipcRenderer.invoke("refresh"),
   close: () => ipcRenderer.send("close-popup"),
 
+  // Settings
+  getSettings: () => ipcRenderer.invoke("get-settings"),
+  saveSettings: (settings) => ipcRenderer.send("save-settings", settings),
+
+  // Updates & Version
+  getUpdateState: () => ipcRenderer.invoke("get-update-state"),
+  installUpdate: () => ipcRenderer.send("install-update"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+
   onUsageUpdate: (cb) => {
     const handler = (_, data) => cb(data);
     ipcRenderer.on("usage-update", handler);
-    // Returns a cleanup function
     return () => ipcRenderer.removeListener("usage-update", handler);
   },
 });
