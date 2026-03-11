@@ -26,7 +26,6 @@ const { makeIcon, makeSpinFrame } = require("./src/icon");
 const { parseSessionPct, parseWeeklyPct, buildTooltip } = require("./src/usage-parser");
 const { fetchUsageFromPage } = require("./src/scraper");
 const { clearClaudeCookies } = require("./src/session");
-const { listChromeProfiles, importChromeProfile } = require("./src/chrome-import");
 const { setupAutoUpdater, getUpdateState, quitAndInstall } = require("./src/updater");
 
 // ── Single instance ───────────────────────────────────────────────────────────
@@ -34,13 +33,12 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 app.on("second-instance", () => {
-  (loginWindow ?? pickerWindow)?.focus();
+  loginWindow?.focus();
 });
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let tray = null;
 let loginWindow = null;
-let pickerWindow = null;
 let pollTimer = null;
 let spinTimer = null;
 let usageData = null;
@@ -211,29 +209,6 @@ async function tryAutoDetectLogin() {
   }
 }
 
-// ── Profile picker window ─────────────────────────────────────────────────────
-function showProfilePicker() {
-  if (pickerWindow && !pickerWindow.isDestroyed()) {
-    pickerWindow.focus();
-    return;
-  }
-
-  pickerWindow = new BrowserWindow({
-    width: 400,
-    height: 460,
-    resizable: false,
-    title: "Sign in to Claude",
-    webPreferences: {
-      preload: path.join(__dirname, "profile-preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  pickerWindow.loadFile("profile-picker.html");
-  pickerWindow.on("closed", () => { pickerWindow = null; });
-}
-
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {
   stopPolling();
@@ -242,29 +217,6 @@ async function logout() {
   updateTray();
   showLoginWindow();
 }
-
-// ── IPC (profile picker only) ─────────────────────────────────────────────────
-ipcMain.handle("get-chrome-profiles", () => listChromeProfiles());
-
-ipcMain.handle("import-chrome-profile", async (_, dir) => {
-  try {
-    const count = await importChromeProfile(dir);
-    if (count === 0)
-      return { success: false, message: "No Claude session found in this profile. Try signing in fresh." };
-
-    pickerWindow?.close();
-    await refresh();
-    startPolling();
-    return { success: true, count };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-});
-
-ipcMain.on("profile-picker:fresh-login", () => {
-  pickerWindow?.close();
-  showLoginWindow();
-});
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
@@ -281,17 +233,11 @@ app.whenReady().then(async () => {
     startPolling();
     return;
   } catch {
-    // No valid session — fall through.
+    // No valid session — fall through to login.
   }
 
-  // Clear stale cookies, then offer Chrome import or fresh login.
   await clearClaudeCookies();
-  const profiles = listChromeProfiles();
-  if (profiles.length > 0) {
-    showProfilePicker();
-  } else {
-    showLoginWindow();
-  }
+  showLoginWindow();
 });
 
 app.on("window-all-closed", () => { /* keep running in tray */ });

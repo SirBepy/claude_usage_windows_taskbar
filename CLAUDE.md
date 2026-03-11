@@ -23,18 +23,11 @@ npm start
 | `src/usage-parser.js` | Parses `five_hour` / `seven_day` fields from usage API response |
 | `src/scraper.js` | Fetches usage data via hidden BrowserWindow + CDP Fetch interception |
 | `src/session.js` | `clearClaudeCookies()` |
-| `src/chrome-import.js` | Chrome cookie import — locked-file copy, DPAPI/AES decryption, sql.js |
-| `profile-preload.js` | Exposes `window.profileAPI` to `profile-picker.html` |
-| `profile-picker.html` | Chrome profile selection shown on first launch |
 
 ## Authentication flow
 
 1. On startup, try to resume from a saved session (Electron persists cookies across runs).
-2. If no session, check for Chrome profiles (`listChromeProfiles`).
-3. **If Chrome profiles exist** → show `profile-picker.html`. User picks a profile;
-   `importChromeProfile()` reads and decrypts Chrome's `Cookies` SQLite file and
-   imports `claude.ai` cookies into Electron's default session.
-4. **If no Chrome** → show `https://claude.ai/login` in a full `BrowserWindow`.
+2. If no session, clear stale cookies and show `https://claude.ai/login` in a full `BrowserWindow`.
    Google OAuth popups are allowed via `setWindowOpenHandler`. Navigation away
    from auth pages triggers `tryAutoDetectLogin` which re-runs the scraper.
 
@@ -82,24 +75,6 @@ No image files on disk. Rendered in `src/icon.js`.
 - Inner ring stays at last known weekly value
 - Implemented in `makeSpinFrame(frame, weeklyPct)`
 
-## Chrome cookie import (Windows)
-
-Chrome locks its `Cookies` SQLite file while running. Standard `fs.copyFileSync`
-fails with EBUSY. The workaround (`safeCopyLockedFile`) uses **inline C# in
-PowerShell** to call Win32 `CreateFile` with:
-- `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE` (dwShareMode = 7)
-- `FILE_FLAG_BACKUP_SEMANTICS` (dwFlagsAndAttributes = 0x02000000)
-
-The copied database is read with `sql.js` (WASM SQLite, no native build tools).
-
-Cookie values are AES-256-GCM encrypted; the key lives in Chrome's `Local State`
-under `os_crypt.encrypted_key`, itself DPAPI-encrypted. Key decryption uses a
-PowerShell script via `ProtectedData.Unprotect`.
-
-**macOS** (future): key is in Keychain (`Chrome Safe Storage`), cookies use
-AES-128-CBC with PBKDF2-SHA1. Skeleton is in place in `getChromeAesKey` /
-`decryptChromeValue`.
-
 ## Keeping README up to date
 
 **Whenever the authentication flow, tray behaviour, scraping approach, or project
@@ -111,4 +86,3 @@ document; CLAUDE.md is the developer reference. Both must stay in sync.
 | Package | Why |
 |---|---|
 | `electron` (devDep) | App framework |
-| `sql.js` | Pure-WASM SQLite — reads Chrome's Cookies DB without native build tools |

@@ -26,20 +26,9 @@ npm start
 
 ## First launch
 
-On first launch the app needs a Claude session. It will try one of two paths:
-
-### Option A — Import from Chrome (recommended)
-
-If Chrome is installed and you're already logged in to claude.ai there, the app
-shows a profile picker. Select your Chrome profile and the app will read and
-decrypt Chrome's cookies to import your Claude session automatically. Chrome can
-be open or closed.
-
-### Option B — Log in manually
-
-If Chrome is not detected, a login window opens directly to `https://claude.ai/login`.
-Sign in (Google OAuth is supported). Once login is detected the window closes and
-the app starts polling.
+On first launch the app needs a Claude session. A login window opens to
+`https://claude.ai/login` — sign in normally (Google OAuth is supported).
+Once login is detected the window closes and the app starts polling.
 
 After a successful login the session is saved, so subsequent launches skip this
 step entirely.
@@ -170,6 +159,3 @@ and offer to update.
 | `src/usage-parser.js` | Parses the usage API response into percentages and reset times |
 | `src/scraper.js` | Loads the usage page in a hidden window, intercepts the API call via CDP |
 | `src/session.js` | Cookie helpers (`clearClaudeCookies`) |
-| `src/chrome-import.js` | Chrome cookie import — locked-file copy, DPAPI decryption, sql.js |
-| `profile-preload.js` | Exposes `window.profileAPI` to the profile picker |
-| `profile-picker.html` | Chrome profile selection window shown on first launch |
