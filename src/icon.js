@@ -179,52 +179,123 @@ function drawSpinningArc(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Draws two vertical bars instead of rings.
+ */
+function drawBars(pixels, sessionPct, weeklyPct, trackRGB) {
+  const [tr, tg, tb] = trackRGB;
+  const sessionRGB = urgencyRGB(sessionPct);
+  const weeklyRGB = urgencyRGB(weeklyPct);
+
+  const sessionFill =
+    sessionPct != null ? (Math.min(sessionPct, 100) / 100) * 18 : 0;
+  const weeklyFill =
+    weeklyPct != null ? (Math.min(weeklyPct, 100) / 100) * 18 : 0;
+
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const idx = (y * SIZE + x) * 4;
+
+      // Session bar (Left: x 3-8, y 2-20)
+      if (x >= 3 && x <= 8 && y >= 2 && y <= 20) {
+        const isFilled = 20 - y <= sessionFill;
+        const [r, g, b] = isFilled ? sessionRGB : tr;
+        const alpha = isFilled ? 255 : 80;
+
+        pixels[idx] = r;
+        pixels[idx + 1] = g;
+        pixels[idx + 2] = b;
+        pixels[idx + 3] = alpha;
+      }
+
+      // Weekly bar (Right: x 13-18, y 2-20)
+      if (x >= 13 && x <= 18 && y >= 2 && y <= 20) {
+        const isFilled = 20 - y <= weeklyFill;
+        const [r, g, b] = isFilled ? weeklyRGB : tr;
+        const alpha = isFilled ? 255 : 80;
+
+        pixels[idx] = r;
+        pixels[idx + 1] = g;
+        pixels[idx + 2] = b;
+        pixels[idx + 3] = alpha;
+      }
+    }
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
  * Builds the 22×22 tray icon as a nativeImage.
- *
- * Outer ring (r 7.5–10.5): session (5-hour) utilisation.
- * Inner ring (r 3.5–5.5):  weekly  (7-day)  utilisation.
- * Both rings are coloured independently by urgency (green / orange / red).
- * Passing null for both renders a blue "loading" state.
  *
  * @param {number|null} sessionPct  0–100 or null
  * @param {number|null} weeklyPct   0–100 or null
+ * @param {object}      settings    App settings
  */
-function makeIcon(sessionPct, weeklyPct) {
+function makeIcon(sessionPct, weeklyPct, settings = {}) {
   const pixels = new Uint8Array(SIZE * SIZE * 4);
   const track = [60, 60, 60];
 
-  drawRingArc(pixels, sessionPct, 10.5, 7.5, urgencyRGB(sessionPct), track, 80);
-  drawRingArc(pixels, weeklyPct, 5.5, 3.5, urgencyRGB(weeklyPct), track, 80);
+  if (settings.iconStyle === "bars") {
+    drawBars(pixels, sessionPct, weeklyPct, track);
+  } else {
+    drawRingArc(
+      pixels,
+      sessionPct,
+      10.5,
+      7.5,
+      urgencyRGB(sessionPct),
+      track,
+      80,
+    );
+    drawRingArc(pixels, weeklyPct, 5.5, 3.5, urgencyRGB(weeklyPct), track, 80);
+  }
 
   return nativeImage.createFromBuffer(pixelsToPNG(SIZE, pixels));
 }
 
 /**
  * Builds a single frame of the refresh animation.
- * The outer ring shows a bright blue spinning arc; the inner ring stays at
- * the last known weekly value so it always shows real data.
  *
- * @param {number}      frame      Animation frame counter (increments each tick)
- * @param {number|null} weeklyPct  Last known weekly utilisation (kept static)
+ * @param {number}      frame      Animation frame counter
+ * @param {number|null} weeklyPct  Last known weekly utilisation
+ * @param {object}      settings    App settings
  */
-function makeSpinFrame(frame, weeklyPct) {
+function makeSpinFrame(frame, weeklyPct, settings = {}) {
   const pixels = new Uint8Array(SIZE * SIZE * 4);
   const track = [60, 60, 60];
 
-  const arcLen = Math.PI * 0.6; // ~108° spinning arc
-  const startAngle = (frame * 0.28) % (2 * Math.PI); // ~18fps feels snappy
+  if (settings.iconStyle === "bars") {
+    // For bars animation, we can just make them pulse or some simple effect
+    // For now, let's just keep them static but blueish
+    drawBars(pixels, 100, weeklyPct, track);
+    // Overwrite session bar color with spinning blue
+    const blue = [74, 144, 226];
+    const pulse = Math.abs(Math.sin(frame * 0.2));
+    for (let y = 2; y <= 20; y++) {
+      for (let x = 3; x <= 8; x++) {
+        const idx = (y * SIZE + x) * 4;
+        pixels[idx] = blue[0];
+        pixels[idx + 1] = blue[1];
+        pixels[idx + 2] = blue[2];
+        pixels[idx + 3] = Math.round(150 + pulse * 105);
+      }
+    }
+  } else {
+    const arcLen = Math.PI * 0.6;
+    const startAngle = (frame * 0.28) % (2 * Math.PI);
 
-  drawSpinningArc(
-    pixels,
-    startAngle,
-    arcLen,
-    10.5,
-    7.5,
-    [74, 144, 226],
-    track,
-    40,
-  );
-  drawRingArc(pixels, weeklyPct, 5.5, 3.5, urgencyRGB(weeklyPct), track, 80);
+    drawSpinningArc(
+      pixels,
+      startAngle,
+      arcLen,
+      10.5,
+      7.5,
+      [74, 144, 226],
+      track,
+      40,
+    );
+    drawRingArc(pixels, weeklyPct, 5.5, 3.5, urgencyRGB(weeklyPct), track, 80);
+  }
 
   return nativeImage.createFromBuffer(pixelsToPNG(SIZE, pixels));
 }

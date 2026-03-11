@@ -100,7 +100,7 @@ async function refresh() {
 function updateTray() {
   if (!tray) return;
   tray.setImage(
-    makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData)),
+    makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData), settings),
   );
   tray.setToolTip(buildTooltip(usageData, settings));
 }
@@ -117,7 +117,7 @@ async function refreshWithAnimation() {
   const weeklyPct = parseWeeklyPct(usageData);
 
   spinTimer = setInterval(() => {
-    tray?.setImage(makeSpinFrame(frame++, weeklyPct));
+    tray?.setImage(makeSpinFrame(frame++, weeklyPct, settings));
   }, 50);
 
   try {
@@ -171,7 +171,7 @@ function buildContextMenu() {
 }
 
 function createTray() {
-  tray = new Tray(makeIcon(null, null));
+  tray = new Tray(makeIcon(null, null, settings));
   tray.setToolTip("Claude Usage — Initializing...");
 
   tray.on("click", () =>
