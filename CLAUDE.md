@@ -19,6 +19,7 @@ npm start
 |---|---|
 | `main.js` | App lifecycle, tray, windows, polling, IPC |
 | `src/icon.js` | Runtime PNG generation — dual progress ring + spin animation |
+| `src/updater.js` | Auto-update wrapper around `electron-updater`; skips in dev mode |
 | `src/usage-parser.js` | Parses `five_hour` / `seven_day` fields from usage API response |
 | `src/scraper.js` | Fetches usage data via hidden BrowserWindow + CDP Fetch interception |
 | `src/session.js` | `clearClaudeCookies()` |

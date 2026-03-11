@@ -27,6 +27,7 @@ const { parseSessionPct, parseWeeklyPct, buildTooltip } = require("./src/usage-p
 const { fetchUsageFromPage } = require("./src/scraper");
 const { clearClaudeCookies } = require("./src/session");
 const { listChromeProfiles, importChromeProfile } = require("./src/chrome-import");
+const { setupAutoUpdater, getUpdateState, quitAndInstall } = require("./src/updater");
 
 // ── Single instance ───────────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) {
@@ -119,6 +120,40 @@ async function refreshWithAnimation() {
   }
 }
 
+function buildContextMenu() {
+  const { state, version } = getUpdateState();
+  const openAtLogin = app.getLoginItemSettings().openAtLogin;
+
+  const template = [
+    { label: "Refresh", click: () => refreshWithAnimation() },
+    { type: "separator" },
+    {
+      label: "Start on login",
+      type: "checkbox",
+      checked: openAtLogin,
+      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+    },
+    { type: "separator" },
+    { label: "Log Out", click: logout },
+    { type: "separator" },
+    { label: "Quit", click: () => app.quit() },
+  ];
+
+  if (state === "downloaded") {
+    template.unshift(
+      { label: `Restart to update to v${version}`, click: quitAndInstall },
+      { type: "separator" },
+    );
+  } else if (state === "available") {
+    template.unshift(
+      { label: `Downloading update v${version}…`, enabled: false },
+      { type: "separator" },
+    );
+  }
+
+  return Menu.buildFromTemplate(template);
+}
+
 function createTray() {
   tray = new Tray(makeIcon(null, null));
   tray.setToolTip("Claude Usage — Initializing...");
@@ -126,15 +161,7 @@ function createTray() {
   tray.on("click", () => refreshWithAnimation());
 
   tray.on("right-click", () => {
-    tray.popUpContextMenu(
-      Menu.buildFromTemplate([
-        { label: "Refresh", click: () => refreshWithAnimation() },
-        { type: "separator" },
-        { label: "Log Out", click: logout },
-        { type: "separator" },
-        { label: "Quit", click: () => app.quit() },
-      ]),
-    );
+    tray.popUpContextMenu(buildContextMenu());
   });
 }
 
@@ -245,6 +272,7 @@ app.whenReady().then(async () => {
   app.setAppUserModelId("com.aiusage.toolbar");
 
   createTray();
+  setupAutoUpdater(() => { /* menu is built fresh on each right-click */ });
 
   // Try to resume an existing session from a previous run.
   try {

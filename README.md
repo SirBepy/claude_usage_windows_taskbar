@@ -4,21 +4,23 @@ A Windows system tray app that monitors your Claude AI session usage in real tim
 It scrapes the Claude usage page once per hour and shows a dual progress-ring icon
 so you always know how much of your session and weekly allowance you've used.
 
-## Requirements
-
-- Windows (macOS support planned)
-- [Node.js](https://nodejs.org/) (v18+)
-- Google Chrome installed (optional — used to import your existing Claude session)
-
 ## Installation
+
+Download the latest `AI-Usage-Toolbar-Setup-x.x.x.exe` from the
+[Releases page](https://github.com/SirBepy/ai_usage/releases) and run it.
+No admin rights required — it installs to your user profile.
+
+The app updates itself automatically. When a new release is published to GitHub,
+it downloads in the background and a **"Restart to update"** item appears in the
+right-click menu. Click it to apply the update immediately, or it will be applied
+the next time you quit and relaunch.
+
+## Running from source
+
+Requires [Node.js](https://nodejs.org/) v18+.
 
 ```bash
 npm install
-```
-
-## Running
-
-```bash
 npm start
 ```
 
@@ -64,7 +66,20 @@ a spinning blue arc while the fetch is in progress, then snaps back to real data
 **Hover** over the icon to see a tooltip with exact percentages and reset times for
 both the session and weekly windows.
 
-**Right-click** for a context menu with Refresh, Log Out, and Quit.
+**Right-click** for a context menu with:
+
+| Item | Action |
+|---|---|
+| Restart to update to vX.X.X | Applies a downloaded update immediately |
+| Refresh | Fetches latest usage now |
+| Start on login | Toggle — adds or removes the app from Windows startup |
+| Log Out | Clears the session and shows the login window |
+| Quit | Exits the app |
+
+## Start on login
+
+Right-click the tray icon and check **Start on login** to have the app launch
+automatically when Windows starts. Uncheck it to disable.
 
 ## How it works
 
@@ -127,12 +142,31 @@ data, and updates the tray icon — all within a couple of seconds.
 
 `curl` ships with Windows 10/11 by default, so no extra software is needed.
 
+## Building a release
+
+```bash
+npm install
+npm run dist
+```
+
+This produces an NSIS installer in `dist/`. To build **and** publish a new GitHub
+release (requires a `GH_TOKEN` environment variable with repo write access):
+
+```bash
+GH_TOKEN=ghp_... npm run dist:publish
+```
+
+electron-builder publishes the installer and a `latest.yml` file to the GitHub
+release. Installed copies of the app will detect the new release within minutes
+and offer to update.
+
 ## Project structure
 
 | Path | Role |
 |---|---|
 | `main.js` | App lifecycle, tray, windows, polling, IPC |
 | `src/icon.js` | Runtime PNG generation — dual progress ring + spin animation |
+| `src/updater.js` | Auto-update wrapper around electron-updater |
 | `src/usage-parser.js` | Parses the usage API response into percentages and reset times |
 | `src/scraper.js` | Loads the usage page in a hidden window, intercepts the API call via CDP |
 | `src/session.js` | Cookie helpers (`clearClaudeCookies`) |
