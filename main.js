@@ -7,7 +7,6 @@ const {
   Menu,
   nativeImage,
   ipcMain,
-  net,
   screen: electronScreen,
   session: electronSession,
 } = require("electron");
@@ -31,27 +30,10 @@ let loginWindow = null;
 let popupWindow = null;
 let pickerWindow = null;
 let pollTimer = null;
-let orgId = null;
 let usageData = null;
 let sqlLib = null; // lazy-loaded on first Chrome import
 
 const POLL_MS = 60 * 60 * 1000;
-const CONFIG_FILE = path.join(app.getPath("userData"), "config.json");
-
-// ── Config ────────────────────────────────────────────────────────────────────
-function readConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-  } catch {
-    return {};
-  }
-}
-function writeConfig(patch) {
-  fs.writeFileSync(
-    CONFIG_FILE,
-    JSON.stringify({ ...readConfig(), ...patch }, null, 2),
-  );
-}
 
 // ── PNG icon generation (pure Node, zero npm deps) ────────────────────────────
 function crc32(buf) {
@@ -130,68 +112,97 @@ function iconForPct(pct) {
   return nativeImage.createFromBuffer(makeCirclePNG(22, r, g, b));
 }
 
-// ── Claude API ────────────────────────────────────────────────────────────────
-function claudeGet(url) {
+// ── Usage page scraper ────────────────────────────────────────────────────────
+// Opens a hidden window, loads the settings/usage page, and intercepts the
+// /api/organizations/.../usage network response via the CDP debugger.
+// This avoids having to replicate the browser's auth header logic.
+function fetchUsageFromPage() {
   return new Promise((resolve, reject) => {
-    const req = net.request({
-      method: "GET",
-      url,
-      session: electronSession.defaultSession,
+    const win = new BrowserWindow({
+      show: false,
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
     });
-    req.setHeader("Accept", "application/json");
-    req.setHeader("Referer", "https://claude.ai/");
-    req.setHeader(
-      "User-Agent",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+
+    let settled = false;
+    function settle(fn) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { win.destroy(); } catch {}
+      fn();
+    }
+
+    const timer = setTimeout(
+      () => settle(() => reject(new Error("Timed out loading usage page"))),
+      20000,
     );
-    let body = "";
-    req.on("response", (res) => {
-      res.on("data", (c) => {
-        body += c;
-      });
-      res.on("end", () => resolve({ status: res.statusCode, body }));
+
+    // Redirect to login = no valid session
+    win.webContents.on("did-navigate", (_, url) => {
+      if (/\/(login|auth|sso)/i.test(url)) {
+        settle(() => reject(new Error("HTTP 401")));
+      }
     });
-    req.on("error", reject);
-    req.end();
+
+    win.webContents.debugger.attach("1.3");
+    win.webContents.debugger.sendCommand("Network.enable");
+
+    win.webContents.debugger.on("message", async (_, method, params) => {
+      if (settled) return;
+      if (method !== "Network.responseReceived") return;
+      const url = params.response.url;
+      if (!url.includes("/api/organizations/") || !url.includes("/usage")) return;
+
+      const s = params.response.status;
+      console.log(`[page-scraper] intercepted ${s} ${url}`);
+      if (s === 401 || s === 403) {
+        settle(() => reject(new Error(`HTTP ${s}`)));
+        return;
+      }
+      if (s === 200) {
+        try {
+          const { body } = await win.webContents.debugger.sendCommand(
+            "Network.getResponseBody",
+            { requestId: params.requestId },
+          );
+          settle(() => resolve(JSON.parse(body)));
+        } catch (e) {
+          settle(() => reject(e));
+        }
+      }
+    });
+
+    win.loadURL("https://claude.ai/settings/usage");
   });
 }
 
-async function resolveOrgId() {
-  if (orgId) return orgId;
-  const cfg = readConfig();
-  if (cfg.orgId) {
-    orgId = cfg.orgId;
-    return orgId;
+async function handleAuthFailure() {
+  stopPolling();
+  // Don't wipe cookies if the login window is already open — we might be mid-login
+  const loginInProgress = loginWindow && !loginWindow.isDestroyed();
+  if (!loginInProgress) {
+    await clearClaudeCookies();
   }
-
-  const { status, body } = await claudeGet(
-    "https://claude.ai/api/organizations",
-  );
-  if (status !== 200) throw new Error(`HTTP ${status}`);
-
-  const orgs = JSON.parse(body);
-  if (!Array.isArray(orgs) || !orgs.length)
-    throw new Error("No organizations found");
-  orgId = orgs[0].uuid || orgs[0].id;
-  writeConfig({ orgId });
-  return orgId;
+  showLoginWindow();
 }
 
 async function fetchUsage() {
-  const id = await resolveOrgId();
-  const { status, body } = await claudeGet(
-    `https://claude.ai/api/organizations/${id}/usage`,
-  );
-
-  if (status === 401 || status === 403) {
-    orgId = null;
-    writeConfig({ orgId: null });
-    stopPolling();
-    showLoginWindow();
-    throw new Error("Session expired — showing login");
+  try {
+    return await fetchUsageFromPage();
+  } catch (e) {
+    if (/HTTP 40[13]/.test(e.message)) {
+      await handleAuthFailure();
+      throw new Error("Session expired — showing login");
+    }
+    throw e;
   }
-  if (status !== 200) throw new Error(`HTTP ${status}`);
-  return JSON.parse(body);
+}
+
+async function clearClaudeCookies() {
+  const cookies = await electronSession.defaultSession.cookies.get({ url: 'https://claude.ai' });
+  await Promise.all(
+    cookies.map(c => electronSession.defaultSession.cookies.remove('https://claude.ai', c.name))
+  );
 }
 
 // ── Chrome profile helpers ────────────────────────────────────────────────────
@@ -399,7 +410,17 @@ async function importChromeProfile(profileDir) {
   if (!cookiesFile) throw new Error("No Cookies file found for this profile");
 
   const tmpFile = path.join(app.getPath("temp"), "_claude_cookies_tmp.db");
+  const tmpWal = tmpFile + "-wal";
+  const tmpShm = tmpFile + "-shm";
+
   safeCopyLockedFile(cookiesFile, tmpFile);
+
+  // Also copy WAL/SHM if present so sql.js sees uncheckpointed writes
+  // (Chrome flushes the refreshed sessionKey to WAL before checkpointing to main DB)
+  const walSrc = cookiesFile + "-wal";
+  const shmSrc = cookiesFile + "-shm";
+  try { if (fs.existsSync(walSrc)) safeCopyLockedFile(walSrc, tmpWal); } catch {}
+  try { if (fs.existsSync(shmSrc)) safeCopyLockedFile(shmSrc, tmpShm); } catch {}
 
   let imported = 0;
   try {
@@ -412,7 +433,13 @@ async function importChromeProfile(profileDir) {
     }
 
     const aesKey = getChromeAesKey();
-    const db = new sqlLib.Database(fs.readFileSync(tmpFile));
+
+    // Load DB + WAL into sql.js virtual FS so SQLite applies WAL automatically
+    sqlLib.FS.mkdir("/ck");
+    sqlLib.FS.writeFile("/ck/c.db", fs.readFileSync(tmpFile));
+    if (fs.existsSync(tmpWal)) sqlLib.FS.writeFile("/ck/c.db-wal", fs.readFileSync(tmpWal));
+    if (fs.existsSync(tmpShm)) sqlLib.FS.writeFile("/ck/c.db-shm", fs.readFileSync(tmpShm));
+    const db = new sqlLib.Database("/ck/c.db");
     const res = db.exec(
       `SELECT name, value, encrypted_value, host_key, path, is_secure, is_httponly, expires_utc
        FROM cookies WHERE host_key LIKE '%claude.ai%'`,
@@ -426,6 +453,7 @@ async function importChromeProfile(profileDir) {
       const c = Object.fromEntries(cols.map((k, i) => [k, row[i]]));
       const val = c.value || decryptChromeValue(c.encrypted_value, aesKey);
       if (!val) continue;
+      if (c.name === "sessionKey") console.log(`[import] sessionKey: ${val.slice(0, 30)}…`);
 
       // Chrome stores expiry as µs since 1601-01-01 (Windows FILETIME epoch)
       const exp = c.expires_utc ? c.expires_utc / 1e6 - 11644473600 : undefined;
@@ -446,9 +474,13 @@ async function importChromeProfile(profileDir) {
       }
     }
   } finally {
-    try {
-      fs.unlinkSync(tmpFile);
-    } catch {}
+    for (const f of [tmpFile, tmpWal, tmpShm]) {
+      try { fs.unlinkSync(f); } catch {}
+    }
+    try { sqlLib.FS.unlink("/ck/c.db"); } catch {}
+    try { sqlLib.FS.unlink("/ck/c.db-wal"); } catch {}
+    try { sqlLib.FS.unlink("/ck/c.db-shm"); } catch {}
+    try { sqlLib.FS.rmdir("/ck"); } catch {}
   }
   return imported;
 }
@@ -492,14 +524,13 @@ function showLoginWindow() {
 
 async function tryAutoDetectLogin() {
   try {
-    orgId = null;
-    writeConfig({ orgId: null });
-    await resolveOrgId();
+    usageData = await fetchUsageFromPage();
+    updateTray();
     loginWindow?.close();
-    await refresh();
+    broadcastUsage();
     startPolling();
   } catch {
-    // Not fully logged in yet — keep waiting
+    // keep waiting — user may still be completing login
   }
 }
 
@@ -553,23 +584,9 @@ async function refresh() {
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {
   stopPolling();
-  orgId = null;
   usageData = null;
-  writeConfig({ orgId: null });
   popupWindow?.close();
-
-  const cookies = await electronSession.defaultSession.cookies.get({
-    url: "https://claude.ai",
-  });
-  await Promise.all(
-    cookies.map((c) =>
-      electronSession.defaultSession.cookies.remove(
-        "https://claude.ai",
-        c.name,
-      ),
-    ),
-  );
-
+  await clearClaudeCookies();
   updateTray();
   showLoginWindow();
 }
@@ -760,9 +777,6 @@ ipcMain.handle("import-chrome-profile", async (_, dir) => {
           "No Claude session found in this profile. Try signing in fresh.",
       };
 
-    orgId = null;
-    writeConfig({ orgId: null });
-    await resolveOrgId(); // verify cookies work before closing the picker
     pickerWindow?.close();
     await refresh();
     startPolling();
@@ -786,13 +800,16 @@ app.whenReady().then(async () => {
 
   // Try to resume an existing session from a previous run
   try {
-    await resolveOrgId();
-    await refresh();
+    usageData = await fetchUsageFromPage();
+    updateTray();
     startPolling();
     return;
-  } catch {}
+  } catch {
+    // No valid session — fall through
+  }
 
-  // No valid session — offer Chrome profile import if available, else fresh login
+  // Clear stale cookies, offer Chrome import or fresh login
+  await clearClaudeCookies();
   const profiles = listChromeProfiles();
   if (profiles.length > 0) {
     showProfilePicker();
