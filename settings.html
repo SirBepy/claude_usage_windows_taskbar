@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - AI Usage</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
     <style>
         :root {
             --bg: #121212;
@@ -27,7 +28,8 @@
             background-color: var(--bg);
             color: var(--text);
             padding: 20px;
-            padding-bottom: 80px; /* Space for sticky footer */
+            padding-bottom: 80px;
+            /* Space for sticky footer */
             user-select: none;
             overflow-x: hidden;
         }
@@ -177,39 +179,40 @@
     <div class="section">
         <div class="section-title">Visuals</div>
         <div class="option">
+            <span class="option-label">Display Mode</span>
+            <select id="displayMode">
+                <option value="icon">Icon Only</option>
+                <option value="number">Number Only</option>
+                <option value="both">Icon & Number</option>
+            </select>
+        </div>
+        <div class="option" id="iconStyleSection">
             <span class="option-label">Icon Style</span>
             <select id="iconStyle">
                 <option value="rings">Rings</option>
-                <option value="bars">Progress Bars</option>
+                <option value="bars">Bars</option>
             </select>
         </div>
-        <div class="option">
-            <span class="option-label">Time Display</span>
-            <select id="timeStyle">
-                <option value="absolute">Absolute Time</option>
-                <option value="countdown">Time Until</option>
-            </select>
-        </div>
-        <div class="option">
-            <span class="option-label">Icon Overlay</span>
+        <div class="option" id="overlayDisplaySection">
+            <span class="option-label">Number to Show</span>
             <select id="overlayDisplay">
                 <option value="none">None</option>
                 <option value="session">Session %</option>
                 <option value="weekly">Weekly %</option>
             </select>
         </div>
-        <div class="option">
-            <span class="option-label">Overlay Font Style</span>
+        <div class="option" id="overlayStyleSection">
+            <span class="option-label">Number Font Style</span>
             <select id="overlayStyle">
                 <option value="classic">Classic Giant</option>
                 <option value="digital">Digital 7-Seg</option>
                 <option value="bold">Ultra-Bold</option>
             </select>
         </div>
-        <div class="option">
-            <span class="option-label">Clean Number (Hide Rings)</span>
+        <div class="option" id="colorOverlayNumberSection">
+            <span class="option-label">Color Number with Thresholds</span>
             <label class="switch">
-                <input type="checkbox" id="cleanNumberMode">
+                <input type="checkbox" id="colorOverlayNumber">
                 <span class="slider"></span>
             </label>
         </div>
@@ -237,11 +240,15 @@
         </div>
         <div class="option">
             <span class="option-label">Session Plan</span>
-            <input type="number" id="sessionPlan" style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;outline:none;width:100px;" disabled>
+            <input type="number" id="sessionPlan"
+                style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;outline:none;width:100px;"
+                disabled>
         </div>
         <div class="option">
             <span class="option-label">Weekly Plan</span>
-            <input type="number" id="weeklyPlan" style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;outline:none;width:100px;" disabled>
+            <input type="number" id="weeklyPlan"
+                style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;outline:none;width:100px;"
+                disabled>
         </div>
     </div>
 
@@ -250,7 +257,8 @@
         <div id="colorContainer">
             <!-- Dynamic color rows will be added here -->
         </div>
-        <button class="btn-secondary" id="addColorBtn" style="margin-top: 10px; width: 100%; font-size: 0.8rem;">+ Add Color Threshold</button>
+        <button class="btn-secondary" id="addColorBtn" style="margin-top: 10px; width: 100%; font-size: 0.8rem;">+ Add
+            Color Threshold</button>
     </div>
 
     <div class="section">

@@ -1,9 +1,14 @@
+const displayMode = document.getElementById('displayMode');
 const iconStyle = document.getElementById('iconStyle');
-const timeStyle = document.getElementById('timeStyle');
+const iconStyleSection = document.getElementById('iconStyleSection');
 const overlayDisplay = document.getElementById('overlayDisplay');
+const overlayDisplaySection = document.getElementById('overlayDisplaySection');
 const overlayStyle = document.getElementById('overlayStyle');
-const cleanNumberMode = document.getElementById('cleanNumberMode');
+const overlayStyleSection = document.getElementById('overlayStyleSection');
+const colorOverlayNumber = document.getElementById('colorOverlayNumber');
+const colorOverlayNumberSection = document.getElementById('colorOverlayNumberSection');
 const launchAtLogin = document.getElementById('launchAtLogin');
+const refreshUpdateBtn = document.getElementById('refreshUpdateBtn');
 const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 
@@ -39,12 +44,15 @@ function createColorRow(min = 0, color = '#ffffff') {
 
 window.onload = async () => {
     const settings = await electronAPI.getSettings();
+    displayMode.value = settings.displayMode || 'both';
     iconStyle.value = settings.iconStyle || 'rings';
     timeStyle.value = settings.timeStyle || 'absolute';
     overlayDisplay.value = settings.overlayDisplay || 'none';
     overlayStyle.value = settings.overlayStyle || 'classic';
-    cleanNumberMode.checked = settings.cleanNumberMode || false;
+    colorOverlayNumber.checked = settings.colorOverlayNumber !== false;
     launchAtLogin.checked = settings.launchAtLogin || false;
+    
+    updateVisibilities();
 
     estimateTokens.checked = settings.estimateTokens || false;
     sessionPlan.value = settings.sessionPlan || 44000;
@@ -97,9 +105,10 @@ saveBtn.onclick = () => {
     const settings = {
         iconStyle: iconStyle.value,
         timeStyle: timeStyle.value,
+        displayMode: displayMode.value,
         overlayDisplay: overlayDisplay.value,
         overlayStyle: overlayStyle.value,
-        cleanNumberMode: cleanNumberMode.checked,
+        colorOverlayNumber: colorOverlayNumber.checked,
         launchAtLogin: launchAtLogin.checked,
         estimateTokens: estimateTokens.checked,
         sessionPlan: parseInt(sessionPlan.value, 10),
@@ -116,3 +125,38 @@ saveBtn.onclick = () => {
 cancelBtn.onclick = () => {
     window.close();
 };
+
+function updateVisibilities() {
+    const mode = displayMode.value;
+    
+    // Icon related fields
+    if (mode === 'number') {
+        iconStyleSection.style.display = 'none';
+        timeStyle.parentElement.style.display = 'none';
+    } else {
+        iconStyleSection.style.display = 'flex';
+        timeStyle.parentElement.style.display = 'flex';
+    }
+    
+    // Number related fields
+    if (mode === 'icon') {
+        overlayDisplaySection.style.display = 'none';
+        overlayStyleSection.style.display = 'none';
+        colorOverlayNumberSection.style.display = 'none';
+    } else {
+        overlayDisplaySection.style.display = 'flex';
+        overlayStyleSection.style.display = 'flex';
+        colorOverlayNumberSection.style.display = 'flex';
+    }
+}
+
+displayMode.addEventListener('change', updateVisibilities);
+
+refreshUpdateBtn.addEventListener('click', () => {
+    electronAPI.checkForUpdates();
+    const updateStatus = document.getElementById('updateStatus');
+    const updateInfo = document.getElementById('updateInfo');
+    updateStatus.textContent = 'Checking for updates...';
+    updateInfo.style.display = 'block';
+});
+

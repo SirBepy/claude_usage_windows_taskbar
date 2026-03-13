@@ -13,9 +13,10 @@ const DEFAULT_SETTINGS = {
   estimateTokens: false,
   sessionPlan: 44000,
   weeklyPlan: 200000,
+  displayMode: "both", // "icon" | "number" | "both"
   overlayDisplay: "none",
-  overlayStyle: "classic", // "classic" | "digital" | "bold"
-  cleanNumberMode: false,
+  overlayStyle: "classic",
+  colorOverlayNumber: true,
   colorThresholds: [
     { min: 0, color: "#27ae60" },
     { min: 50, color: "#e67e22" },

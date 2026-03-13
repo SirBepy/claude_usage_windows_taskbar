@@ -338,8 +338,10 @@ function drawBars(pixels, sessionPct, weeklyPct, trackRGB, settings) {
 function makeIcon(sessionPct, weeklyPct, settings = {}) {
   const pixels = new Uint8Array(SIZE * SIZE * 4);
   const track = [60, 60, 60];
+  const mode = settings.displayMode || "both"; // icon | number | both
 
-  if (!settings.cleanNumberMode) {
+  // 1. Draw Background Visuals (Rings/Bars)
+  if (mode === "icon" || mode === "both") {
     if (settings.iconStyle === "bars") {
       drawBars(pixels, sessionPct, weeklyPct, track, settings);
     } else {
@@ -364,40 +366,48 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
     }
   }
 
-  // Draw numeric overlay if requested
-  const overlayType = settings.overlayDisplay;
-  if (overlayType === "session" || overlayType === "weekly") {
-    const pct = overlayType === "session" ? sessionPct : weeklyPct;
-    if (pct != null) {
-      const val = Math.min(Math.round(pct), 99);
-      const str = String(val);
-      const style = settings.overlayStyle || "classic";
-      const font = FONTS[style];
-      
-      // Calculate centering
-      const totalWidth = (str.length * font.width) + (str.length - 1);
-      const x = Math.max(0, Math.floor((SIZE - totalWidth) / 2));
-      const y = Math.max(0, Math.floor((SIZE - font.height) / 2));
+  // 2. Draw Numeric Overlay
+  if (mode === "number" || mode === "both") {
+    const overlayType = settings.overlayDisplay;
+    if (overlayType === "session" || overlayType === "weekly") {
+      const pct = overlayType === "session" ? sessionPct : weeklyPct;
+      if (pct != null) {
+        const val = Math.min(Math.round(pct), 99);
+        const str = String(val);
+        const style = settings.overlayStyle || "classic";
+        const font = FONTS[style];
 
-      // Draw a darkened plate for maximum contrast (unless in clean mode where background is black anyway)
-      if (!settings.cleanNumberMode) {
-        const plateX = Math.max(0, x - 1);
-        const plateY = Math.max(0, y - 1);
-        const plateW = Math.min(SIZE - plateX, totalWidth + 2);
-        const plateH = Math.min(SIZE - plateY, font.height + 2);
+        // Calculate centering
+        const totalWidth = str.length * font.width + (str.length - 1);
+        const x = Math.max(0, Math.floor((SIZE - totalWidth) / 2));
+        const y = Math.max(0, Math.floor((SIZE - font.height) / 2));
 
-        for (let py = plateY; py < plateY + plateH; py++) {
-          for (let px = plateX; px < plateX + plateW; px++) {
-            const idx = (py * SIZE + px) * 4;
-            pixels[idx] = Math.round(pixels[idx] * 0.2);
-            pixels[idx + 1] = Math.round(pixels[idx + 1] * 0.2);
-            pixels[idx + 2] = Math.round(pixels[idx + 2] * 0.2);
-            pixels[idx + 3] = Math.max(pixels[idx + 3], 210);
+        // Background plate for "both" mode to ensure contrast
+        if (mode === "both") {
+          const plateX = Math.max(0, x - 1);
+          const plateY = Math.max(0, y - 1);
+          const plateW = Math.min(SIZE - plateX, totalWidth + 2);
+          const plateH = Math.min(SIZE - plateY, font.height + 2);
+
+          for (let py = plateY; py < plateY + plateH; py++) {
+            for (let px = plateX; px < plateX + plateW; px++) {
+              const idx = (py * SIZE + px) * 4;
+              pixels[idx] = Math.round(pixels[idx] * 0.2);
+              pixels[idx + 1] = Math.round(pixels[idx + 1] * 0.2);
+              pixels[idx + 2] = Math.round(pixels[idx + 2] * 0.2);
+              pixels[idx + 3] = Math.max(pixels[idx + 3], 210);
+            }
           }
         }
-      }
 
-      drawText(pixels, str, x, y, [255, 255, 255], style);
+        // Determine number color
+        let textColor = [255, 255, 255];
+        if (settings.colorOverlayNumber) {
+          textColor = urgencyRGB(pct, settings);
+        }
+
+        drawText(pixels, str, x, y, textColor, style);
+      }
     }
   }
 
