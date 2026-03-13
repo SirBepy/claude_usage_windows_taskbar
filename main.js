@@ -143,7 +143,16 @@ function buildContextMenu() {
     { type: "separator" },
     {
       label: "Settings",
+      accelerator: "CmdOrCtrl+,",
       click: showSettingsWindow,
+    },
+    { type: "separator" },
+    {
+      label: "Support",
+      submenu: [
+        { label: "Check for Updates...", click: showSettingsWindow },
+        { label: "About AI Usage Tool", enabled: false },
+      ]
     },
     { type: "separator" },
     loggedIn
@@ -266,8 +275,8 @@ function showSettingsWindow() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 400,
-    height: 650,
+    width: 480,
+    height: 700,
     title: "Settings",
     icon: path.join(__dirname, "src", "icon.png"),
     resizable: false,

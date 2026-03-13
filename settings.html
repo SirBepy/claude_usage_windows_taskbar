@@ -27,7 +27,9 @@
             background-color: var(--bg);
             color: var(--text);
             padding: 20px;
+            padding-bottom: 80px; /* Space for sticky footer */
             user-select: none;
+            overflow-x: hidden;
         }
 
         h2 {
@@ -81,10 +83,17 @@
         }
 
         .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
             display: flex;
             justify-content: flex-end;
             gap: 10px;
-            margin-top: 20px;
+            padding: 16px 20px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            z-index: 100;
         }
 
         button {
@@ -179,6 +188,14 @@
             <select id="timeStyle">
                 <option value="absolute">Absolute Time</option>
                 <option value="countdown">Time Until</option>
+            </select>
+        </div>
+        <div class="option">
+            <span class="option-label">Icon Overlay</span>
+            <select id="overlayDisplay">
+                <option value="none">None</option>
+                <option value="session">Session %</option>
+                <option value="weekly">Weekly %</option>
             </select>
         </div>
     </div>

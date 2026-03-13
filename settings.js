@@ -1,5 +1,6 @@
 const iconStyle = document.getElementById('iconStyle');
 const timeStyle = document.getElementById('timeStyle');
+const overlayDisplay = document.getElementById('overlayDisplay');
 const launchAtLogin = document.getElementById('launchAtLogin');
 const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
@@ -38,6 +39,7 @@ window.onload = async () => {
     const settings = await electronAPI.getSettings();
     iconStyle.value = settings.iconStyle || 'rings';
     timeStyle.value = settings.timeStyle || 'absolute';
+    overlayDisplay.value = settings.overlayDisplay || 'none';
     launchAtLogin.checked = settings.launchAtLogin || false;
 
     estimateTokens.checked = settings.estimateTokens || false;
@@ -91,6 +93,7 @@ saveBtn.onclick = () => {
     const settings = {
         iconStyle: iconStyle.value,
         timeStyle: timeStyle.value,
+        overlayDisplay: overlayDisplay.value,
         launchAtLogin: launchAtLogin.checked,
         estimateTokens: estimateTokens.checked,
         sessionPlan: parseInt(sessionPlan.value, 10),

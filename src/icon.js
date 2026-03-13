@@ -198,7 +198,47 @@ function drawSpinningArc(
   }
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+// ── Pixel Font (3x5) ───────────────────────────────────────────────────────────
+const FONT = {
+  0: [0x7, 0x5, 0x5, 0x5, 0x7],
+  1: [0x2, 0x2, 0x2, 0x2, 0x2],
+  2: [0x7, 0x1, 0x7, 0x4, 0x7],
+  3: [0x7, 0x1, 0x7, 0x1, 0x7],
+  4: [0x5, 0x5, 0x7, 0x1, 0x1],
+  5: [0x7, 0x4, 0x7, 0x1, 0x7],
+  6: [0x7, 0x4, 0x7, 0x5, 0x7],
+  7: [0x7, 0x1, 0x1, 0x1, 0x1],
+  8: [0x7, 0x5, 0x7, 0x5, 0x7],
+  9: [0x7, 0x5, 0x7, 0x1, 0x7],
+};
+
+function drawDigit(pixels, digit, x, y, color) {
+  const glyph = FONT[digit];
+  if (!glyph) return;
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 3; col++) {
+      if ((glyph[row] >> (2 - col)) & 1) {
+        const px = x + col;
+        const py = y + row;
+        if (px >= 0 && px < SIZE && py >= 0 && py < SIZE) {
+          const idx = (py * SIZE + px) * 4;
+          pixels[idx] = color[0];
+          pixels[idx + 1] = color[1];
+          pixels[idx + 2] = color[2];
+          pixels[idx + 3] = 255;
+        }
+      }
+    }
+  }
+}
+
+function drawText(pixels, text, x, y, color) {
+  let curX = x;
+  for (const char of String(text)) {
+    drawDigit(pixels, parseInt(char, 10), curX, y, color);
+    curX += 4; // 3 width + 1 spacing
+  }
+}
 
 /**
  * Draws two vertical bars instead of rings.
@@ -277,6 +317,20 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
       track,
       80,
     );
+  }
+
+  // Draw numeric overlay if requested
+  const overlayType = settings.overlayDisplay;
+  if (overlayType === "session" || overlayType === "weekly") {
+    const pct = overlayType === "session" ? sessionPct : weeklyPct;
+    if (pct != null) {
+      const val = Math.min(Math.round(pct), 99);
+      const str = String(val);
+      // Center 1 or 2 digits (22x22 icon)
+      const x = str.length === 1 ? 10 : 7;
+      const y = 8;
+      drawText(pixels, str, x, y, [255, 255, 255]);
+    }
   }
 
   return nativeImage.createFromBuffer(pixelsToPNG(SIZE, pixels));
