@@ -49,22 +49,6 @@ jobs:
           name: unsigned-installer
           path: dist/Claude-Usage-Taskbar-Tool-Setup-${{ steps.version.outputs.version }}.exe
 
-      - name: Sign installer with SignPath
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
-          output-artifact-directory: dist
-          wait-for-completion: true
-
-      - name: Update latest.yml hash for signed installer
-        shell: bash
-        run: node scripts/update-release-hash.js
-
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
