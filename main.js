@@ -172,13 +172,13 @@ function buildContextMenu() {
       click: showSettingsWindow,
     },
     { type: "separator" },
-    {
-      label: "Support",
-      submenu: [
-        { label: "Check for Updates...", click: showSettingsWindow },
-        { label: "About AI Usage Tool", enabled: false },
-      ],
-    },
+    // {
+    //   label: "Support",
+    //   submenu: [
+    //     { label: "Check for Updates...", click: showSettingsWindow },
+    //     { label: "About AI Usage Tool", enabled: false },
+    //   ],
+    // },
     { type: "separator" },
     loggedIn
       ? { label: "Log Out", click: logout }
