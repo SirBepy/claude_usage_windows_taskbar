@@ -1,6 +1,8 @@
 const displayMode = document.getElementById('displayMode');
 const iconStyle = document.getElementById('iconStyle');
+const timeStyle = document.getElementById('timeStyle');
 const iconStyleSection = document.getElementById('iconStyleSection');
+const timeStyleSection = document.getElementById('timeStyleSection');
 const overlayDisplay = document.getElementById('overlayDisplay');
 const overlayDisplaySection = document.getElementById('overlayDisplaySection');
 const overlayStyle = document.getElementById('overlayStyle');
@@ -132,10 +134,10 @@ function updateVisibilities() {
     // Icon related fields
     if (mode === 'number') {
         iconStyleSection.style.display = 'none';
-        timeStyle.parentElement.style.display = 'none';
+        timeStyleSection.style.display = 'none';
     } else {
         iconStyleSection.style.display = 'flex';
-        timeStyle.parentElement.style.display = 'flex';
+        timeStyleSection.style.display = 'flex';
     }
     
     // Number related fields

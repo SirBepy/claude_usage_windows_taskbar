@@ -193,6 +193,13 @@
                 <option value="bars">Bars</option>
             </select>
         </div>
+        <div class="option" id="timeStyleSection">
+            <span class="option-label">Time Display</span>
+            <select id="timeStyle">
+                <option value="absolute">Absolute Time</option>
+                <option value="countdown">Time Until</option>
+            </select>
+        </div>
         <div class="option" id="overlayDisplaySection">
             <span class="option-label">Number to Show</span>
             <select id="overlayDisplay">
@@ -266,6 +273,7 @@
         <div class="option" id="updateStatusOption">
             <span class="option-label" id="appVersionLabel">Version: ...</span>
             <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="btn-secondary" id="refreshUpdateBtn" style="padding: 4px 8px; font-size: 0.7rem;">Refresh ↻</button>
                 <span id="updateStateLabel" style="font-size: 0.85em; color: var(--text-dim);"></span>
                 <button class="btn-primary" id="updateBtn"
                     style="display: none; padding: 4px 8px; font-size: 0.8rem;">Update</button>
