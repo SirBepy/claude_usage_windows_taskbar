@@ -46,21 +46,21 @@ const originalError = console.error;
 
 function addToBuffer(type, args) {
   const timestamp = new Date().toISOString();
-  const message = args.map(arg => 
-    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-  ).join(' ');
+  const message = args
+    .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
+    .join(" ");
   logBuffer.push(`[${timestamp}] [${type}] ${message}`);
   if (logBuffer.length > MAX_LOGS) logBuffer.shift();
 }
 
 console.log = (...args) => {
   originalLog.apply(console, args);
-  addToBuffer('INFO', args);
+  addToBuffer("INFO", args);
 };
 
 console.error = (...args) => {
   originalError.apply(console, args);
-  addToBuffer('ERROR', args);
+  addToBuffer("ERROR", args);
 };
 
 // ── Single instance ───────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ function buildContextMenu() {
       submenu: [
         { label: "Check for Updates...", click: showSettingsWindow },
         { label: "About AI Usage Tool", enabled: false },
-      ]
+      ],
     },
     { type: "separator" },
     loggedIn
@@ -337,7 +337,7 @@ ipcMain.on("check-for-updates", () => {
   setupAutoUpdater();
 });
 ipcMain.on("copy-logs", () => {
-  clipboard.writeText(logBuffer.join('\n'));
+  clipboard.writeText(logBuffer.join("\n"));
 });
 ipcMain.handle("get-app-version", () => app.getVersion());
 
