@@ -40,21 +40,15 @@ jobs:
       - name: Build (unsigned)
         run: npm run dist
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"  # skip signing — SignPath handles it below
-
-      - name: Upload unsigned installer as artifact
-        id: upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned-installer
-          path: dist/Claude-Usage-Taskbar-Tool-Setup-${{ steps.version.outputs.version }}.exe
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           files: |
-            dist/Claude-Usage-Taskbar-Tool-Setup-${{ steps.version.outputs.version }}.exe
+            dist/*.exe
             dist/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,6 +74,7 @@ jobs:
         run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get version
         id: version

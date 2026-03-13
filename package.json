@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --enable-logging",
-    "dist": "electron-builder --publish never",
+    "dist": "electron-builder",
     "dist:publish": "electron-builder --publish always"
   },
   "dependencies": {
