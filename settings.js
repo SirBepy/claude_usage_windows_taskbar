@@ -99,10 +99,6 @@ window.onload = async () => {
     }
 };
 
-updateBtn.onclick = () => {
-    // This is handled dynamically above
-};
-
 saveBtn.onclick = () => {
     const settings = {
         iconStyle: iconStyle.value,
@@ -155,10 +151,16 @@ function updateVisibilities() {
 displayMode.addEventListener('change', updateVisibilities);
 
 refreshUpdateBtn.addEventListener('click', () => {
+    console.log('Manual update check triggered');
     electronAPI.checkForUpdates();
     const updateStatus = document.getElementById('updateStatus');
     const updateInfo = document.getElementById('updateInfo');
-    updateStatus.textContent = 'Checking for updates...';
-    updateInfo.style.display = 'block';
+    if (updateStatus) updateStatus.textContent = 'Checking for updates...';
+    if (updateInfo) updateInfo.style.display = 'block';
+    
+    // Hide info again after 5 seconds if no change
+    setTimeout(() => {
+        if (updateInfo) updateInfo.style.display = 'none';
+    }, 5000);
 });
 
