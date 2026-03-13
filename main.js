@@ -36,6 +36,32 @@ const {
   quitAndInstall,
   downloadUpdate,
 } = require("./src/updater");
+const { clipboard } = require("electron");
+
+// ── Log Buffer ────────────────────────────────────────────────────────────────
+const logBuffer = [];
+const MAX_LOGS = 200;
+const originalLog = console.log;
+const originalError = console.error;
+
+function addToBuffer(type, args) {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+  ).join(' ');
+  logBuffer.push(`[${timestamp}] [${type}] ${message}`);
+  if (logBuffer.length > MAX_LOGS) logBuffer.shift();
+}
+
+console.log = (...args) => {
+  originalLog.apply(console, args);
+  addToBuffer('INFO', args);
+};
+
+console.error = (...args) => {
+  originalError.apply(console, args);
+  addToBuffer('ERROR', args);
+};
 
 // ── Single instance ───────────────────────────────────────────────────────────
 if (!app.requestSingleInstanceLock()) {
@@ -309,6 +335,9 @@ ipcMain.on("install-update", () => quitAndInstall());
 ipcMain.on("download-update", () => downloadUpdate());
 ipcMain.on("check-for-updates", () => {
   setupAutoUpdater();
+});
+ipcMain.on("copy-logs", () => {
+  clipboard.writeText(logBuffer.join('\n'));
 });
 ipcMain.handle("get-app-version", () => app.getVersion());
 

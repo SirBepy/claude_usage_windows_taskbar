@@ -382,24 +382,6 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         const x = Math.max(0, Math.floor((SIZE - totalWidth) / 2));
         const y = Math.max(0, Math.floor((SIZE - font.height) / 2));
 
-        // Background plate for "both" mode to ensure contrast
-        if (mode === "both") {
-          const plateX = Math.max(0, x - 1);
-          const plateY = Math.max(0, y - 1);
-          const plateW = Math.min(SIZE - plateX, totalWidth + 2);
-          const plateH = Math.min(SIZE - plateY, font.height + 2);
-
-          for (let py = plateY; py < plateY + plateH; py++) {
-            for (let px = plateX; px < plateX + plateW; px++) {
-              const idx = (py * SIZE + px) * 4;
-              pixels[idx] = Math.round(pixels[idx] * 0.2);
-              pixels[idx + 1] = Math.round(pixels[idx + 1] * 0.2);
-              pixels[idx + 2] = Math.round(pixels[idx + 2] * 0.2);
-              pixels[idx + 3] = Math.max(pixels[idx + 3], 210);
-            }
-          }
-        }
-
         // Determine number color
         let textColor = [255, 255, 255];
         if (settings.colorOverlayNumber) {

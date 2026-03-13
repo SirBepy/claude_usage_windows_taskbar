@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadUpdate: () => ipcRenderer.send("download-update"),
   installUpdate: () => ipcRenderer.send("install-update"),
   checkForUpdates: () => ipcRenderer.send("check-for-updates"),
+  copyLogs: () => ipcRenderer.send("copy-logs"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
 
   onUsageUpdate: (cb) => {

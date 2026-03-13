@@ -13,6 +13,7 @@ const launchAtLogin = document.getElementById('launchAtLogin');
 const refreshUpdateBtn = document.getElementById('refreshUpdateBtn');
 const saveBtn = document.getElementById('saveBtn');
 const cancelBtn = document.getElementById('cancelBtn');
+const copyLogsBtn = document.getElementById('copyLogsBtn');
 
 const estimateTokens = document.getElementById('estimateTokens');
 const sessionPlan = document.getElementById('sessionPlan');
@@ -163,4 +164,17 @@ refreshUpdateBtn.addEventListener('click', () => {
         if (updateInfo) updateInfo.style.display = 'none';
     }, 5000);
 });
+
+copyLogsBtn.addEventListener('click', () => {
+    electronAPI.copyLogs();
+    const originalText = copyLogsBtn.textContent;
+    copyLogsBtn.textContent = 'Copied to Clipboard!';
+    copyLogsBtn.classList.replace('btn-secondary', 'btn-primary');
+    
+    setTimeout(() => {
+        copyLogsBtn.textContent = originalText;
+        copyLogsBtn.classList.replace('btn-primary', 'btn-secondary');
+    }, 2000);
+});
+
 
