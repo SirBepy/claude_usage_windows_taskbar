@@ -26,7 +26,7 @@ function setupAutoUpdater(onStateChange) {
   autoUpdater.setFeedURL({
     provider: "github",
     owner: "SirBepy",
-    repo: "ai_usage",
+    repo: "claude_usage_in_taskbar",
   });
 
   autoUpdater.on("update-available", (info) => {

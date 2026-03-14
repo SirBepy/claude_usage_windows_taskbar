@@ -40,9 +40,12 @@ function saveSettings(settings) {
   try {
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
 
-    // Sycn with Electron's login item settings
-    if (typeof settings.launchAtLogin === "boolean") {
-      app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
+    // Sync with Electron's login item settings
+    if (app.isPackaged && typeof settings.launchAtLogin === "boolean") {
+      app.setLoginItemSettings({
+        openAtLogin: settings.launchAtLogin,
+        args: ["--hidden"],
+      });
     }
   } catch (e) {
     console.error("Failed to save settings:", e);

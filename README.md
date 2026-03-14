@@ -5,7 +5,7 @@ A Windows system tray app that shows your Claude AI usage at a glance — no bro
 ## Installation
 
 Download the latest `AI-Usage-Toolbar-Setup-x.x.x.exe` (Windows) or `.dmg` / `.zip` (macOS) from the
-[Releases page](https://github.com/SirBepy/ai_usage/releases) and run it.
+[Releases page](https://github.com/SirBepy/claude_usage_in_taskbar/releases) and run it.
 No admin rights required.
 
 The app updates itself automatically in the background.

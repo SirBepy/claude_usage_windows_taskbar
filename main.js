@@ -373,6 +373,14 @@ app.whenReady().then(async () => {
     // No valid session — fall through to login.
   }
 
+  // If started with --hidden (e.g. via Login Items), don't pop up the login window.
+  // The user can still log in by clicking the tray icon later.
+  if (process.argv.includes("--hidden")) {
+    console.log("Started in hidden mode. Skipping initial login window.");
+    updateTray(); // Ensure tray is initialized even if not logged in
+    return;
+  }
+
   await clearClaudeCookies();
   showLoginWindow();
 });

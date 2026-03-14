@@ -40,7 +40,7 @@
     "publish": {
       "provider": "github",
       "owner": "SirBepy",
-      "repo": "ai_usage"
+      "repo": "claude_usage_in_taskbar"
     },
     "files": [
       "main.js",
