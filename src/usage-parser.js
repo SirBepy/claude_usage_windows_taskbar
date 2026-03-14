@@ -67,7 +67,8 @@ function buildTooltip(data, settings = {}) {
   lines.push(row("Session:", "Weekly:"));
   lines.push(row(`${session?.utilization ?? ""}%`, `${w?.utilization ?? ""}%`));
 
-  const sTime = sNode && session.resets_at ? formatResetAt(session.resets_at, style) : "";
+  const sTime =
+    sNode && session.resets_at ? formatResetAt(session.resets_at, style) : "";
   const wTime = wNode && w.resets_at ? formatResetAt(w.resets_at, style) : "";
   if (sTime || wTime) {
     lines.push(row(sTime, wTime));
@@ -76,12 +77,16 @@ function buildTooltip(data, settings = {}) {
   if (settings.estimateTokens) {
     let sEst = "";
     if (sNode && settings.sessionPlan) {
-      const left = Math.round(Math.max(0, 100 - session.utilization) / 100 * settings.sessionPlan);
+      const left = Math.round(
+        (Math.max(0, 100 - session.utilization) / 100) * settings.sessionPlan,
+      );
       sEst = `${formatTokens(left)} left`;
     }
     let wEst = "";
     if (wNode && settings.weeklyPlan) {
-      const left = Math.round(Math.max(0, 100 - w.utilization) / 100 * settings.weeklyPlan);
+      const left = Math.round(
+        (Math.max(0, 100 - w.utilization) / 100) * settings.weeklyPlan,
+      );
       wEst = `${formatTokens(left)} left`;
     }
     if (sEst || wEst) {

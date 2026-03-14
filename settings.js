@@ -183,7 +183,7 @@ displayMode.addEventListener("change", updateVisibilities);
 refreshUpdateBtn.addEventListener("click", () => {
   console.log("Manual update check triggered");
   electronAPI.checkForUpdates();
-  
+
   updateStateLabel.innerText = "Checking for updates...";
   updateStateLabel.style.color = "var(--text-dim)";
   updateBtn.style.display = "none";
