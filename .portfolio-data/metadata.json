@@ -1,0 +1,12 @@
+{
+  "title": "Claude AI Usage Toolbar",
+  "shortDescription": "System tray app that shows your Claude Pro usage limits at a glance.",
+  "type": "Tray Tool",
+  "status": "finished",
+  "languages": ["JavaScript", "HTML"],
+  "frameworks": ["Electron", "electron-updater", "sql.js", "electron-builder"],
+  "liveUrl": "https://github.com/SirBepy/claude_usage_in_taskbar/releases",
+  "mainImage": "tool-preview.png",
+  "images": ["tool-preview.png", "settings-1.png", "settings-2.png"],
+  "year": 2026
+}
