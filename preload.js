@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   refresh: () => ipcRenderer.invoke("refresh"),
   close: () => ipcRenderer.send("close-popup"),
 
+  // History & Stats
+  getUsageHistory: () => ipcRenderer.invoke("get-usage-history"),
+
   // Settings
   getSettings: () => ipcRenderer.invoke("get-settings"),
   saveSettings: (settings) => ipcRenderer.send("save-settings", settings),
@@ -28,5 +31,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const handler = (_, data) => cb(data);
     ipcRenderer.on("update-state-changed", handler);
     return () => ipcRenderer.removeListener("update-state-changed", handler);
+  },
+  onHistoryUpdated: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on("history-updated", handler);
+    return () => ipcRenderer.removeListener("history-updated", handler);
   },
 });

@@ -28,6 +28,7 @@ const {
   buildTooltip,
 } = require("./src/usage-parser");
 const { fetchUsageFromPage } = require("./src/scraper");
+const { recordSnapshot, loadHistory } = require("./src/history");
 const { clearClaudeCookies } = require("./src/session");
 const { loadSettings, saveSettings } = require("./src/settings");
 const {
@@ -80,6 +81,7 @@ let usageData = null;
 let loggedIn = false;
 let settingsVisible = false;
 let settingsWindow = null;
+let statsWindow = null;
 let settings = loadSettings();
 
 const POLL_MS = 60 * 60 * 1000;
@@ -123,6 +125,8 @@ async function refresh() {
     usageData = await fetchUsage();
     loggedIn = true;
     updateTray();
+    recordSnapshot(usageData);
+    statsWindow?.webContents.send("history-updated", loadHistory());
   } catch (e) {
     console.error("Refresh failed:", e.message);
   }
@@ -166,6 +170,7 @@ function buildContextMenu() {
 
   const template = [
     { label: "Refresh", click: () => refreshWithAnimation() },
+    { label: "Stats", click: showStatsWindow },
     { type: "separator" },
     {
       label: "Settings",
@@ -322,7 +327,40 @@ function showSettingsWindow() {
   });
 }
 
+// ── Stats window ──────────────────────────────────────────────────────────────
+function showStatsWindow() {
+  if (statsWindow && !statsWindow.isDestroyed()) {
+    statsWindow.show();
+    statsWindow.focus();
+    return;
+  }
+
+  statsWindow = new BrowserWindow({
+    width: 480,
+    height: 700,
+    title: "Stats",
+    icon: path.join(__dirname, "src", "icon.png"),
+    resizable: true,
+    backgroundColor: '#111111',
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+
+  statsWindow.setMenuBarVisibility(false);
+  statsWindow.loadFile("stats.html");
+
+  statsWindow.on("closed", () => {
+    statsWindow = null;
+  });
+}
+
 // ── IPC ───────────────────────────────────────────────────────────────────────
+ipcMain.handle("get-usage-history", () => loadHistory());
 ipcMain.handle("get-settings", () => settings);
 ipcMain.on("save-settings", (_, newSettings) => {
   settings = newSettings;
@@ -367,6 +405,8 @@ app.whenReady().then(async () => {
     usageData = await fetchUsageFromPage();
     loggedIn = true;
     updateTray();
+    recordSnapshot(usageData);
+    statsWindow?.webContents.send("history-updated", loadHistory());
     startPolling();
     return;
   } catch {
