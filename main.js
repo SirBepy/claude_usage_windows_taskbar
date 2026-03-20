@@ -85,6 +85,64 @@ let loggedIn = false;
 let dashboardWindow = null;
 let settings = loadSettings();
 
+// ── Temp display cycling (left click) ─────────────────────────────────────────
+let tempDisplay = null;       // { displayMode, overlayDisplay } or null
+let tempDisplayCycle = null;  // array of display states
+let tempDisplayIndex = 0;
+let tempDisplayTimer = null;
+
+function getActiveSettings() {
+  return tempDisplay ? { ...settings, ...tempDisplay } : settings;
+}
+
+function buildDisplayCycle() {
+  const { displayMode, overlayDisplay } = settings;
+  if (displayMode === "number") {
+    const other = overlayDisplay === "session" ? "weekly" : "session";
+    return [
+      { displayMode: "number", overlayDisplay },
+      { displayMode: "number", overlayDisplay: other },
+      { displayMode: "icon" },
+    ];
+  }
+  return [
+    { displayMode, overlayDisplay },
+    { displayMode: "number", overlayDisplay: "session" },
+    { displayMode: "number", overlayDisplay: "weekly" },
+  ];
+}
+
+function cycleDisplayMode() {
+  if (!tempDisplayCycle) {
+    tempDisplayCycle = buildDisplayCycle();
+    tempDisplayIndex = 0;
+  }
+
+  tempDisplayIndex = (tempDisplayIndex + 1) % tempDisplayCycle.length;
+  tempDisplay = tempDisplayCycle[tempDisplayIndex];
+  updateTray();
+
+  if (tempDisplayTimer) clearTimeout(tempDisplayTimer);
+
+  if (tempDisplayIndex === 0) {
+    // Wrapped back to saved state — end temp mode
+    tempDisplay = null;
+    tempDisplayCycle = null;
+    tempDisplayTimer = null;
+    return;
+  }
+
+  tempDisplayTimer = setTimeout(resetDisplayMode, 60 * 1000);
+}
+
+function resetDisplayMode() {
+  tempDisplay = null;
+  tempDisplayCycle = null;
+  tempDisplayIndex = 0;
+  tempDisplayTimer = null;
+  updateTray();
+}
+
 const POLL_MS = 60 * 60 * 1000;
 
 // ── Usage fetching ────────────────────────────────────────────────────────────
@@ -136,10 +194,9 @@ async function refresh() {
 // ── Tray ──────────────────────────────────────────────────────────────────────
 function updateTray() {
   if (!tray) return;
-  tray.setImage(
-    makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData), settings),
-  );
-  tray.setToolTip(buildTooltip(usageData, settings));
+  const s = getActiveSettings();
+  tray.setImage(makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData), s));
+  tray.setToolTip(buildTooltip(usageData, s));
 }
 
 /**
@@ -154,7 +211,7 @@ async function refreshWithAnimation() {
   const weeklyPct = parseWeeklyPct(usageData);
 
   spinTimer = setInterval(() => {
-    tray?.setImage(makeSpinFrame(frame++, weeklyPct, settings));
+    tray?.setImage(makeSpinFrame(frame++, weeklyPct, getActiveSettings()));
   }, 50);
 
   try {
@@ -199,7 +256,7 @@ function createTray() {
   tray.setToolTip("Claude Usage — Initializing...");
 
   tray.on("click", () =>
-    loggedIn ? refreshWithAnimation() : showLoginWindow(),
+    loggedIn ? cycleDisplayMode() : showLoginWindow(),
   );
 
   tray.on("right-click", () => {
@@ -321,6 +378,12 @@ ipcMain.handle("get-settings", () => settings);
 ipcMain.on("save-settings", (_, newSettings) => {
   settings = newSettings;
   saveSettings(settings);
+  // Drop any active temp cycle — saved state has changed
+  if (tempDisplayTimer) clearTimeout(tempDisplayTimer);
+  tempDisplay = null;
+  tempDisplayCycle = null;
+  tempDisplayIndex = 0;
+  tempDisplayTimer = null;
   updateTray();
 });
 ipcMain.on("logout", async () => {
