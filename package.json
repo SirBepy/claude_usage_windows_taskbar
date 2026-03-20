@@ -49,6 +49,8 @@
       "preload.js",
       "profile-preload.js",
       "profile-picker.html",
+      "dashboard.html",
+      "dashboard.js",
       "settings.html",
       "stats.html",
       "settings.js",

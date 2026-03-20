@@ -79,9 +79,7 @@ let pollTimer = null;
 let spinTimer = null;
 let usageData = null;
 let loggedIn = false;
-let settingsVisible = false;
-let settingsWindow = null;
-let statsWindow = null;
+let dashboardWindow = null;
 let settings = loadSettings();
 
 const POLL_MS = 60 * 60 * 1000;
@@ -126,7 +124,7 @@ async function refresh() {
     loggedIn = true;
     updateTray();
     recordSnapshot(usageData);
-    statsWindow?.webContents.send("history-updated", loadHistory());
+    dashboardWindow?.webContents.send("history-updated", loadHistory());
   } catch (e) {
     console.error("Refresh failed:", e.message);
   }
@@ -170,25 +168,11 @@ function buildContextMenu() {
 
   const template = [
     { label: "Refresh", click: () => refreshWithAnimation() },
-    { label: "Stats", click: showStatsWindow },
+    { label: "Dashboard", click: showDashboardWindow },
     { type: "separator" },
-    {
-      label: "Settings",
-      click: showSettingsWindow,
-    },
-    { type: "separator" },
-    // {
-    //   label: "Support",
-    //   submenu: [
-    //     { label: "Check for Updates...", click: showSettingsWindow },
-    //     { label: "About AI Usage Tool", enabled: false },
-    //   ],
-    // },
-    { type: "separator" },
-    loggedIn
-      ? { label: "Log Out", click: logout }
-      : { label: "Log In", click: showLoginWindow },
-    { type: "separator" },
+    ...(!loggedIn
+      ? [{ label: "Log In", click: showLoginWindow }, { type: "separator" }]
+      : []),
     { label: "Quit", click: () => app.quit() },
   ];
 
@@ -296,52 +280,21 @@ function showLoginWindow() {
   });
 }
 
-// ── Settings window ───────────────────────────────────────────────────────────
-function showSettingsWindow() {
-  if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.show();
-    settingsWindow.focus();
+// ── Dashboard window ──────────────────────────────────────────────────────────
+function showDashboardWindow() {
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.show();
+    dashboardWindow.focus();
     return;
   }
 
-  settingsWindow = new BrowserWindow({
+  dashboardWindow = new BrowserWindow({
     width: 480,
     height: 700,
-    title: "Settings",
-    icon: path.join(__dirname, "src", "icon.png"),
-    resizable: false,
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      preload: path.join(__dirname, "preload.js"),
-    },
-  });
-
-  settingsWindow.setMenuBarVisibility(false);
-  settingsWindow.loadFile("settings.html");
-
-  settingsWindow.on("closed", () => {
-    settingsWindow = null;
-  });
-}
-
-// ── Stats window ──────────────────────────────────────────────────────────────
-function showStatsWindow() {
-  if (statsWindow && !statsWindow.isDestroyed()) {
-    statsWindow.show();
-    statsWindow.focus();
-    return;
-  }
-
-  statsWindow = new BrowserWindow({
-    width: 480,
-    height: 700,
-    title: "Stats",
+    title: "Claude Usage",
     icon: path.join(__dirname, "src", "icon.png"),
     resizable: true,
-    backgroundColor: '#111111',
+    backgroundColor: "#121212",
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -351,11 +304,11 @@ function showStatsWindow() {
     },
   });
 
-  statsWindow.setMenuBarVisibility(false);
-  statsWindow.loadFile("stats.html");
+  dashboardWindow.setMenuBarVisibility(false);
+  dashboardWindow.loadFile(path.join(__dirname, "dashboard.html"));
 
-  statsWindow.on("closed", () => {
-    statsWindow = null;
+  dashboardWindow.on("closed", () => {
+    dashboardWindow = null;
   });
 }
 
@@ -365,13 +318,16 @@ ipcMain.handle("get-settings", () => settings);
 ipcMain.on("save-settings", (_, newSettings) => {
   settings = newSettings;
   saveSettings(settings);
-  updateTray(); // in case icon style changed
+  updateTray();
+});
+ipcMain.on("logout", async () => {
+  await logout();
 });
 ipcMain.handle("get-update-state", () => getUpdateState());
 ipcMain.on("install-update", () => quitAndInstall());
 ipcMain.on("download-update", () => downloadUpdate());
 ipcMain.on("check-for-updates", () => {
-  setupAutoUpdater(); // Re-trigger check without overwriting existing callback
+  setupAutoUpdater();
 });
 ipcMain.on("copy-logs", () => {
   clipboard.writeText(logBuffer.join("\n"));
@@ -397,7 +353,7 @@ app.whenReady().then(async () => {
   setupAutoUpdater(() => {
     const state = getUpdateState();
     console.log("Updater state changed via callback:", state);
-    settingsWindow?.webContents.send("update-state-changed", state);
+    dashboardWindow?.webContents.send("update-state-changed", state);
   });
 
   // Try to resume an existing session from a previous run.
@@ -406,7 +362,7 @@ app.whenReady().then(async () => {
     loggedIn = true;
     updateTray();
     recordSnapshot(usageData);
-    statsWindow?.webContents.send("history-updated", loadHistory());
+    dashboardWindow?.webContents.send("history-updated", loadHistory());
     startPolling();
     return;
   } catch {

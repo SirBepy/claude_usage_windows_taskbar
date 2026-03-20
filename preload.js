@@ -3,16 +3,13 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  getUsage: () => ipcRenderer.invoke("get-usage"),
-  refresh: () => ipcRenderer.invoke("refresh"),
-  close: () => ipcRenderer.send("close-popup"),
-
   // History & Stats
   getUsageHistory: () => ipcRenderer.invoke("get-usage-history"),
 
   // Settings
   getSettings: () => ipcRenderer.invoke("get-settings"),
   saveSettings: (settings) => ipcRenderer.send("save-settings", settings),
+  logout: () => ipcRenderer.send("logout"),
 
   // Updates & Version
   getUpdateState: () => ipcRenderer.invoke("get-update-state"),
@@ -22,11 +19,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   copyLogs: () => ipcRenderer.send("copy-logs"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
 
-  onUsageUpdate: (cb) => {
-    const handler = (_, data) => cb(data);
-    ipcRenderer.on("usage-update", handler);
-    return () => ipcRenderer.removeListener("usage-update", handler);
-  },
   onUpdateStateChange: (cb) => {
     const handler = (_, data) => cb(data);
     ipcRenderer.on("update-state-changed", handler);
