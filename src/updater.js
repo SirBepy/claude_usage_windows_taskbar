@@ -29,6 +29,12 @@ function setupAutoUpdater(onStateChange) {
     repo: "claude_usage_in_taskbar",
   });
 
+  autoUpdater.on("update-not-available", () => {
+    updateState = "none";
+    updateVersion = null;
+    _onStateChange?.();
+  });
+
   autoUpdater.on("update-available", (info) => {
     updateState = "available";
     updateVersion = info.version;
