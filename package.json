@@ -36,7 +36,8 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "shortcutName": "Claude Usage Taskbar Tool"
+      "shortcutName": "Claude Usage Taskbar Tool",
+      "include": "build/installer.nsh"
     },
     "publish": {
       "provider": "github",
