@@ -46,65 +46,99 @@ function fmtResetTime(isoStr) {
   return `resets in ${m}m`;
 }
 
+// ── Chart state (persists across re-renders) ──────────────────────────────────
+const lineVisible = { session: true, weekly: true, expected: true };
+
 // ── Chart rendering ───────────────────────────────────────────────────────────
-function buildChart(history) {
-  // Chart dimensions
-  const W = 420, H = 160;
-  const ML = 30, MR = 8, MT = 8, MB = 28;
+function buildChart(history, weeklyStartMs, weeklyEndMs) {
+  const W = 420, H = 172;
+  const ML = 30, MR = 8, MT = 8, MB = 38;
   const PW = W - ML - MR;
   const PH = H - MT - MB;
 
-  const pts = history.map((r) => ({
-    t: hourToMs(r.hour),
-    s: r.session_pct,
-    w: r.weekly_pct,
-  }));
-
-  const minT = pts[0].t;
-  const maxT = pts.length > 1 ? pts[pts.length - 1].t : minT + 3_600_000;
+  const minT = weeklyStartMs;
+  const maxT = weeklyEndMs;
   const tRange = maxT - minT || 1;
 
   function px(t) { return ML + ((t - minT) / tRange) * PW; }
   function py(v) { return MT + (1 - v / 100) * PH; }
 
-  // Grid lines + y-axis labels
+  // Grid lines + y labels
   const gridLines = [0, 25, 50, 75, 100].map((v) => {
     const y = py(v);
     return `<line x1="${ML}" x2="${W - MR}" y1="${y}" y2="${y}" stroke="#252525" stroke-width="1"/>
             <text x="${ML - 4}" y="${y + 3.5}" text-anchor="end" fill="#555" font-size="8">${v}</text>`;
   }).join("");
 
-  // X-axis day labels — one per unique date at the midpoint of that day's points
-  const byDay = {};
-  pts.forEach((p) => {
-    const day = new Date(p.t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    (byDay[day] = byDay[day] || []).push(p.t);
-  });
-  const dayLabels = Object.entries(byDay).map(([label, ts]) => {
-    const midT = ts.reduce((a, b) => a + b, 0) / ts.length;
-    const x = px(midT);
-    return `<text x="${x}" y="${H - MB + 13}" text-anchor="middle" fill="#555" font-size="8">${label}</text>`;
-  }).join("");
-
-  // Polylines
-  function polyline(series, color) {
-    const filtered = pts.filter((p) => p[series] !== null && p[series] !== undefined);
-    if (filtered.length === 0) return "";
-    if (filtered.length === 1) {
-      const x = px(filtered[0].t), y = py(filtered[0][series]);
-      return `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}"/>`;
-    }
-    const d = filtered.map((p, i) => `${i === 0 ? "M" : "L"}${px(p.t).toFixed(1)},${py(p[series]).toFixed(1)}`).join(" ");
-    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // X-axis: tick + two-row label at each midnight within the window
+  const dayTicks = [];
+  const cursor = new Date(weeklyStartMs);
+  cursor.setHours(24, 0, 0, 0); // advance to first midnight after weeklyStart
+  while (cursor.getTime() <= weeklyEndMs) {
+    const x = px(cursor.getTime()).toFixed(1);
+    const dayName = cursor.toLocaleDateString("en-US", { weekday: "short" });
+    const dateStr = (cursor.getMonth() + 1) + "/" + cursor.getDate();
+    dayTicks.push(
+      `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#333" stroke-width="1"/>` +
+      `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#666" font-size="8">${dayName}</text>` +
+      `<text x="${x}" y="${H - MB + 24}" text-anchor="middle" fill="#444" font-size="7">${dateStr}</text>`
+    );
+    cursor.setDate(cursor.getDate() + 1);
   }
 
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
-    ${gridLines}
-    <line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#252525" stroke-width="1"/>
-    ${polyline("s", "#4a90e2")}
-    ${polyline("w", "#9b59b6")}
-    ${dayLabels}
-  </svg>`;
+  // Reference diagonal: (weeklyStart, 0%) → (weeklyEnd, 100%)
+  const refLine =
+    `<line id="line-expected"` +
+    ` x1="${px(minT).toFixed(1)}" y1="${py(0).toFixed(1)}"` +
+    ` x2="${px(maxT).toFixed(1)}" y2="${py(100).toFixed(1)}"` +
+    ` stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+
+  // Data polylines
+  const pts = history.map((r) => ({ t: hourToMs(r.hour), s: r.session_pct, w: r.weekly_pct }));
+
+  function makeLine(key, color, id) {
+    const f = pts.filter((p) => p[key] !== null && p[key] !== undefined);
+    if (f.length === 0) return `<g id="${id}"></g>`;
+    if (f.length === 1) {
+      return `<circle id="${id}" cx="${px(f[0].t).toFixed(1)}" cy="${py(f[0][key]).toFixed(1)}" r="2.5" fill="${color}"/>`;
+    }
+    const d = f.map((p, i) => `${i === 0 ? "M" : "L"}${px(p.t).toFixed(1)},${py(p[key]).toFixed(1)}`).join(" ");
+    return `<path id="${id}" d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+
+  return (
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">` +
+    gridLines +
+    `<line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#252525" stroke-width="1"/>` +
+    dayTicks.join("") +
+    refLine +
+    makeLine("s", "#4a90e2", "line-session") +
+    makeLine("w", "#9b59b6", "line-weekly") +
+    `</svg>`
+  );
+}
+
+// ── Line visibility ───────────────────────────────────────────────────────────
+function applyLineVisibility() {
+  const svg = statsContent.querySelector("svg");
+  if (!svg) return;
+  for (const key of ["session", "weekly", "expected"]) {
+    const el = svg.querySelector(`#line-${key}`);
+    if (el) el.style.display = lineVisible[key] ? "" : "none";
+    const leg = document.getElementById(`legend-${key}`);
+    if (leg) leg.style.opacity = lineVisible[key] ? "1" : "0.35";
+  }
+}
+
+function setupLegendToggles() {
+  for (const key of ["session", "weekly", "expected"]) {
+    const el = document.getElementById(`legend-${key}`);
+    if (!el) continue;
+    el.onclick = () => {
+      lineVisible[key] = !lineVisible[key];
+      applyLineVisibility();
+    };
+  }
 }
 
 // ── Stats rendering ───────────────────────────────────────────────────────────
@@ -120,7 +154,20 @@ function renderHistory(history) {
   const sessionReset = fmtResetTime(latest.session_resets_at);
   const weeklyReset = fmtResetTime(latest.weekly_resets_at);
 
-  const chartSvg = buildChart(history);
+  // Weekly window bounds
+  const weeklyEndMs = latest.weekly_resets_at
+    ? new Date(latest.weekly_resets_at).getTime()
+    : Date.now() + 3_600_000;
+  const weeklyStartMs = weeklyEndMs - 7 * 24 * 3_600_000;
+
+  const chartSvg = buildChart(history, weeklyStartMs, weeklyEndMs);
+
+  const legendItem = (id, color, isDashed, label) => {
+    const dot = isDashed
+      ? `<span style="display:inline-block;width:14px;height:2px;background:${color};vertical-align:middle;margin-right:4px;border-radius:1px;border-top:2px dashed ${color};"></span>`
+      : `<span class="legend-dot" style="background:${color}"></span>`;
+    return `<span id="${id}" style="cursor:pointer">${dot}${label}</span>`;
+  };
 
   statsContent.innerHTML = `
     <div class="stat-cards">
@@ -137,12 +184,16 @@ function renderHistory(history) {
     </div>
     <div class="chart-container">
       <div class="chart-legend">
-        <span><span class="legend-dot" style="background:#4a90e2"></span>Session</span>
-        <span><span class="legend-dot" style="background:#9b59b6"></span>Weekly</span>
+        ${legendItem("legend-session",  "#4a90e2", false, "Session")}
+        ${legendItem("legend-weekly",   "#9b59b6", false, "Weekly")}
+        ${legendItem("legend-expected", "#555",    true,  "Expected")}
       </div>
       ${chartSvg}
     </div>
   `;
+
+  setupLegendToggles();
+  applyLineVisibility();
 }
 
 window.electronAPI?.getUsageHistory().then(renderHistory);
