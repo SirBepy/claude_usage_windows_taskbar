@@ -53,6 +53,42 @@ function pixelsToPNG(size, pixels) {
   ]);
 }
 
+// ── Rounded rectangle ─────────────────────────────────────────────────────────
+
+/**
+ * Fills a rounded rectangle into the pixel buffer.
+ * Uses per-pixel distance-to-corner for clean edges at small radii.
+ */
+function drawRoundedRect(pixels, x1, y1, x2, y2, r, rgb, alpha) {
+  const [cr, cg, cb] = rgb;
+  // Corner circle centres
+  const corners = [
+    [x1 + r, y1 + r],
+    [x2 - r, y1 + r],
+    [x1 + r, y2 - r],
+    [x2 - r, y2 - r],
+  ];
+  for (let y = y1; y <= y2; y++) {
+    for (let x = x1; x <= x2; x++) {
+      // Determine which region the pixel is in
+      const inCornerZone =
+        (x < x1 + r || x > x2 - r) && (y < y1 + r || y > y2 - r);
+      if (inCornerZone) {
+        // Find the nearest corner centre
+        const cx = x < x1 + r ? x1 + r : x2 - r;
+        const cy = y < y1 + r ? y1 + r : y2 - r;
+        const dx = x - cx, dy = y - cy;
+        if (dx * dx + dy * dy > r * r) continue;
+      }
+      const idx = (y * SIZE + x) * 4;
+      pixels[idx]     = cr;
+      pixels[idx + 1] = cg;
+      pixels[idx + 2] = cb;
+      pixels[idx + 3] = alpha;
+    }
+  }
+}
+
 // ── Ring drawing ──────────────────────────────────────────────────────────────
 
 const SIZE = 22;
@@ -475,11 +511,19 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         const x = Math.max(0, Math.floor((SIZE - totalWidth) / 2));
         const y = Math.max(0, Math.floor((SIZE - font.height) / 2));
 
-        // Determine number color
+        // Determine coloring mode
+        const colorMode = settings.colorOverlayMode ?? (settings.colorOverlayNumber ? "number" : "none");
         let textColor = [255, 255, 255];
-        if (settings.colorOverlayNumber) {
+
+        if (colorMode === "background") {
+          // Colored rounded-rect badge behind the number, white text on top
+          const bgColor = urgencyRGB(pct, settings);
+          const pad = 1;
+          drawRoundedRect(pixels, x - pad, y - pad, x + totalWidth + pad, y + font.height + pad, 3, bgColor, 230);
+        } else if (colorMode === "number") {
           textColor = urgencyRGB(pct, settings);
         }
+        // "none" → white text, no background
 
         drawText(pixels, str, x, y, textColor, style);
       }

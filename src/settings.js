@@ -16,7 +16,7 @@ const DEFAULT_SETTINGS = {
   displayMode: "both", // "icon" | "number" | "both"
   overlayDisplay: "none",
   overlayStyle: "classic",
-  colorOverlayNumber: true,
+  colorOverlayMode: "number", // "number" | "background" | "none"
   colorThresholds: [
     { min: 0, color: "#27ae60" },
     { min: 50, color: "#e67e22" },

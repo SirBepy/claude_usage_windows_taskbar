@@ -209,8 +209,8 @@ const overlayDisplay = document.getElementById("overlayDisplay");
 const overlayDisplaySection = document.getElementById("overlayDisplaySection");
 const overlayStyle = document.getElementById("overlayStyle");
 const overlayStyleSection = document.getElementById("overlayStyleSection");
-const colorOverlayNumber = document.getElementById("colorOverlayNumber");
-const colorOverlayNumberSection = document.getElementById("colorOverlayNumberSection");
+const colorOverlayMode = document.getElementById("colorOverlayMode");
+const colorOverlayModeSection = document.getElementById("colorOverlayModeSection");
 const launchAtLogin = document.getElementById("launchAtLogin");
 const estimateTokens = document.getElementById("estimateTokens");
 const sessionPlan = document.getElementById("sessionPlan");
@@ -254,11 +254,11 @@ function updateVisibilities() {
   if (mode === "icon") {
     overlayDisplaySection.style.display = "none";
     overlayStyleSection.style.display = "none";
-    colorOverlayNumberSection.style.display = "none";
+    colorOverlayModeSection.style.display = "none";
   } else {
     overlayDisplaySection.style.display = "flex";
     overlayStyleSection.style.display = "flex";
-    colorOverlayNumberSection.style.display = "flex";
+    colorOverlayModeSection.style.display = "flex";
   }
 }
 
@@ -309,7 +309,7 @@ window.onload = async () => {
     timeStyle.value = settings.timeStyle || "absolute";
     overlayDisplay.value = settings.overlayDisplay || "none";
     overlayStyle.value = settings.overlayStyle || "classic";
-    colorOverlayNumber.checked = settings.colorOverlayNumber !== false;
+    colorOverlayMode.value = settings.colorOverlayMode || "number";
     launchAtLogin.checked = settings.launchAtLogin || false;
     estimateTokens.checked = settings.estimateTokens || false;
     sessionPlan.value = settings.sessionPlan || 44000;
@@ -347,7 +347,7 @@ saveBtn.onclick = () => {
     displayMode: displayMode.value,
     overlayDisplay: overlayDisplay.value,
     overlayStyle: overlayStyle.value,
-    colorOverlayNumber: colorOverlayNumber.checked,
+    colorOverlayMode: colorOverlayMode.value,
     launchAtLogin: launchAtLogin.checked,
     estimateTokens: estimateTokens.checked,
     sessionPlan: parseInt(sessionPlan.value, 10),
