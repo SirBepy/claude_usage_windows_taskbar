@@ -77,11 +77,12 @@ function drawRoundedRect(pixels, x1, y1, x2, y2, r, rgb, alpha) {
         // Find the nearest corner centre
         const cx = x < x1 + r ? x1 + r : x2 - r;
         const cy = y < y1 + r ? y1 + r : y2 - r;
-        const dx = x - cx, dy = y - cy;
+        const dx = x - cx,
+          dy = y - cy;
         if (dx * dx + dy * dy > r * r) continue;
       }
       const idx = (y * SIZE + x) * 4;
-      pixels[idx]     = cr;
+      pixels[idx] = cr;
       pixels[idx + 1] = cg;
       pixels[idx + 2] = cb;
       pixels[idx + 3] = alpha;
@@ -512,19 +513,30 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         const y = Math.max(0, Math.floor((SIZE - font.height) / 2));
 
         // Determine coloring mode
-        const colorMode = settings.colorOverlayMode ?? (settings.colorOverlayNumber ? "number" : "none");
+        const colorMode =
+          settings.colorOverlayMode ??
+          (settings.colorOverlayNumber ? "number" : "none");
         let textColor = [255, 255, 255];
         let textX = x;
         let textY = y;
 
         if (colorMode === "background") {
           // Fixed square badge centered in the 22x22 canvas
-          const sq = SIZE - 4; // 18x18
+          const sq = SIZE; // 22x22
           const sqX1 = Math.floor((SIZE - sq) / 2);
           const sqY1 = Math.floor((SIZE - sq) / 2);
           const sqX2 = sqX1 + sq - 1;
           const sqY2 = sqY1 + sq - 1;
-          drawRoundedRect(pixels, sqX1, sqY1, sqX2, sqY2, 3, urgencyRGB(pct, settings), 230);
+          drawRoundedRect(
+            pixels,
+            sqX1,
+            sqY1,
+            sqX2,
+            sqY2,
+            3,
+            urgencyRGB(pct, settings),
+            230,
+          );
           textX = sqX1 + Math.max(0, Math.floor((sq - totalWidth) / 2));
           textY = sqY1 + Math.max(0, Math.floor((sq - font.height) / 2));
         } else if (colorMode === "number") {
