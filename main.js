@@ -15,6 +15,9 @@ const hookServer = http.createServer((req, res) => {
   if (req.method === "POST" && req.url === "/refresh") {
     res.writeHead(204).end();
     refreshWithAnimation().catch(console.error);
+  } else if (req.method === "POST" && req.url === "/quit") {
+    res.writeHead(204).end();
+    app.quit();
   } else {
     res.writeHead(404).end();
   }
