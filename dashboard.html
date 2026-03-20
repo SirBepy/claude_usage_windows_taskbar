@@ -1,31 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="void">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Usage</title>
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Manrope:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #121212;
-            --surface: #1e1e1e;
-            --primary: #4a90e2;
-            --text: #e0e0e0;
-            --text-dim: #999;
-            --border: #333;
+            --bg: #16151f;
+            --surface: #1e1d2b;
+            --surface-alt: #242334;
+            --primary: #9d7dfc;
+            --secondary: #6e8fff;
+            --text: #e2e0f0;
+            --text-dim: #6b6990;
+            --border: #2d2c44;
             --danger: #e05252;
+            --success: #7af0c0;
         }
 
-        * {
+        *, *::before, *::after {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
 
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'DM Sans', system-ui, sans-serif;
             background-color: var(--bg);
             color: var(--text);
             user-select: none;
@@ -33,7 +39,13 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            -webkit-font-smoothing: antialiased;
         }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--surface); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
         /* ── Shared header ── */
         .view-header {
@@ -46,10 +58,13 @@
         }
 
         .view-header h2 {
-            font-weight: 500;
-            font-size: 1.05rem;
+            font-family: 'Manrope', system-ui, sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
             flex: 1;
             text-align: center;
+            color: var(--text);
+            letter-spacing: -0.01em;
         }
 
         .icon-btn {
@@ -59,17 +74,17 @@
             cursor: pointer;
             font-size: 1.1rem;
             padding: 4px 6px;
-            border-radius: 4px;
+            border-radius: 6px;
             width: 32px;
             height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.15s, color 0.15s;
+            transition: background 0.2s, color 0.2s;
         }
 
         .icon-btn:hover {
-            background: #2a2a2a;
+            background: var(--surface-alt);
             color: var(--text);
         }
 
@@ -103,37 +118,42 @@
             flex: 1;
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 14px 16px;
             text-align: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.35);
         }
 
         .stat-label {
-            font-size: 0.75rem;
+            font-size: 0.68rem;
+            font-weight: 700;
             color: var(--text-dim);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.1em;
             margin-bottom: 8px;
         }
 
         .stat-value {
+            font-family: 'Manrope', system-ui, sans-serif;
             font-size: 2rem;
-            font-weight: 600;
+            font-weight: 700;
             line-height: 1;
         }
 
         .stat-sublabel {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             color: var(--text-dim);
             margin-top: 6px;
+            font-family: 'Fira Code', monospace;
         }
 
         /* ── Chart ── */
         .chart-container {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 12px 12px 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.35);
         }
 
         .chart-legend {
@@ -163,18 +183,20 @@
         /* ── Settings sections ── */
         .section {
             background: var(--surface);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 16px;
             margin-bottom: 16px;
             border: 1px solid var(--border);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.35);
         }
 
         .section-title {
-            font-size: 0.9rem;
+            font-size: 0.68rem;
+            font-weight: 700;
             color: var(--text-dim);
-            margin-bottom: 12px;
+            margin-bottom: 14px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.1em;
         }
 
         .option {
@@ -189,23 +211,28 @@
         }
 
         .option-label {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
+            color: var(--text);
         }
 
         select {
-            background: #2a2a2a;
+            background: var(--surface-alt);
             color: var(--text);
             border: 1px solid var(--border);
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 5px 10px;
+            border-radius: 6px;
             outline: none;
+            font-family: 'DM Sans', system-ui, sans-serif;
+            font-size: 0.88rem;
+            transition: border-color 0.2s;
+            cursor: pointer;
         }
 
         select:focus {
             border-color: var(--primary);
         }
 
-        /* ── Footer (settings save/cancel) ── */
+        /* ── Footer ── */
         .footer {
             position: fixed;
             bottom: 0;
@@ -214,28 +241,31 @@
             display: flex;
             justify-content: flex-end;
             gap: 10px;
-            padding: 16px 20px;
+            padding: 14px 20px;
             background: var(--surface);
             border-top: 1px solid var(--border);
             z-index: 100;
         }
 
         button {
-            padding: 8px 16px;
-            border-radius: 4px;
+            padding: 7px 16px;
+            border-radius: 8px;
             border: none;
             cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.2s;
+            font-family: 'DM Sans', system-ui, sans-serif;
+            font-size: 0.88rem;
+            font-weight: 600;
+            transition: all 0.2s;
         }
 
         .btn-primary {
             background: var(--primary);
-            color: white;
+            color: var(--bg);
         }
 
         .btn-primary:hover {
-            background: #357abd;
+            filter: brightness(1.1);
+            transform: translateY(-1px);
         }
 
         .btn-secondary {
@@ -245,7 +275,8 @@
         }
 
         .btn-secondary:hover {
-            background: #2a2a2a;
+            border-color: var(--primary);
+            color: var(--primary);
         }
 
         .btn-danger {
@@ -280,28 +311,31 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: #333;
-            transition: .4s;
+            background-color: var(--surface-alt);
+            border: 1px solid var(--border);
+            transition: .3s;
             border-radius: 34px;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 16px;
-            width: 16px;
+            height: 14px;
+            width: 14px;
             left: 2px;
             bottom: 2px;
-            background-color: white;
-            transition: .4s;
+            background-color: var(--text-dim);
+            transition: .3s;
             border-radius: 50%;
         }
 
         input:checked+.slider {
             background-color: var(--primary);
+            border-color: var(--primary);
         }
 
         input:checked+.slider:before {
+            background-color: var(--bg);
             transform: translateX(14px);
         }
     </style>
@@ -407,13 +441,13 @@
                 <div class="option">
                     <span class="option-label">Session Plan</span>
                     <input type="number" id="sessionPlan"
-                        style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;outline:none;width:100px;"
+                        style="background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;outline:none;width:100px;font-family:'DM Sans',system-ui,sans-serif;"
                         disabled>
                 </div>
                 <div class="option">
                     <span class="option-label">Weekly Plan</span>
                     <input type="number" id="weeklyPlan"
-                        style="background:#2a2a2a;color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;outline:none;width:100px;"
+                        style="background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;outline:none;width:100px;font-family:'DM Sans',system-ui,sans-serif;"
                         disabled>
                 </div>
             </div>
@@ -432,9 +466,9 @@
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <button class="btn-secondary" id="refreshUpdateBtn"
                             style="padding: 4px 8px; font-size: 0.7rem;">Refresh ↻</button>
-                        <span id="updateStateLabel" style="font-size: 0.85em; color: var(--text-dim);"></span>
+                        <span id="updateStateLabel" style="font-size: 0.82rem; color: var(--text-dim);"></span>
                         <button class="btn-primary" id="updateBtn"
-                            style="display: none; padding: 4px 8px; font-size: 0.8rem;">Update</button>
+                            style="display: none; padding: 4px 10px; font-size: 0.8rem;">Update</button>
                     </div>
                 </div>
                 <div style="margin-top: 15px;">

@@ -66,8 +66,8 @@ function buildChart(history, weeklyStartMs, weeklyEndMs) {
   // Grid lines + y labels
   const gridLines = [0, 25, 50, 75, 100].map((v) => {
     const y = py(v);
-    return `<line x1="${ML}" x2="${W - MR}" y1="${y}" y2="${y}" stroke="#252525" stroke-width="1"/>
-            <text x="${ML - 4}" y="${y + 3.5}" text-anchor="end" fill="#555" font-size="8">${v}</text>`;
+    return `<line x1="${ML}" x2="${W - MR}" y1="${y}" y2="${y}" stroke="#2d2c44" stroke-width="1"/>
+            <text x="${ML - 4}" y="${y + 3.5}" text-anchor="end" fill="#6b6990" font-size="8" font-family="Fira Code, monospace">${v}</text>`;
   }).join("");
 
   // X-axis: tick + two-row label at each midnight within the window
@@ -79,9 +79,9 @@ function buildChart(history, weeklyStartMs, weeklyEndMs) {
     const dayName = cursor.toLocaleDateString("en-US", { weekday: "short" });
     const dateStr = (cursor.getMonth() + 1) + "/" + cursor.getDate();
     dayTicks.push(
-      `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#333" stroke-width="1"/>` +
-      `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#666" font-size="8">${dayName}</text>` +
-      `<text x="${x}" y="${H - MB + 24}" text-anchor="middle" fill="#444" font-size="7">${dateStr}</text>`
+      `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#2d2c44" stroke-width="1"/>` +
+      `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#6b6990" font-size="8" font-family="DM Sans, system-ui">${dayName}</text>` +
+      `<text x="${x}" y="${H - MB + 24}" text-anchor="middle" fill="#4a4870" font-size="7" font-family="DM Sans, system-ui">${dateStr}</text>`
     );
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -91,7 +91,7 @@ function buildChart(history, weeklyStartMs, weeklyEndMs) {
     `<line id="line-expected"` +
     ` x1="${px(minT).toFixed(1)}" y1="${py(0).toFixed(1)}"` +
     ` x2="${px(maxT).toFixed(1)}" y2="${py(100).toFixed(1)}"` +
-    ` stroke="#555" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+    ` stroke="#6b6990" stroke-width="1.5" stroke-dasharray="5,4"/>`;
 
   // Data polylines
   const pts = history.map((r) => ({ t: hourToMs(r.hour), s: r.session_pct, w: r.weekly_pct }));
@@ -109,11 +109,11 @@ function buildChart(history, weeklyStartMs, weeklyEndMs) {
   return (
     `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">` +
     gridLines +
-    `<line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#252525" stroke-width="1"/>` +
+    `<line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#2d2c44" stroke-width="1"/>` +
     dayTicks.join("") +
     refLine +
-    makeLine("s", "#4a90e2", "line-session") +
-    makeLine("w", "#9b59b6", "line-weekly") +
+    makeLine("s", "#9d7dfc", "line-session") +
+    makeLine("w", "#6e8fff", "line-weekly") +
     `</svg>`
   );
 }
@@ -184,9 +184,9 @@ function renderHistory(history) {
     </div>
     <div class="chart-container">
       <div class="chart-legend">
-        ${legendItem("legend-session",  "#4a90e2", false, "Session")}
-        ${legendItem("legend-weekly",   "#9b59b6", false, "Weekly")}
-        ${legendItem("legend-expected", "#555",    true,  "Expected")}
+        ${legendItem("legend-session",  "#9d7dfc", false, "Session")}
+        ${legendItem("legend-weekly",   "#6e8fff", false, "Weekly")}
+        ${legendItem("legend-expected", "#6b6990", true,  "Expected")}
       </div>
       ${chartSvg}
     </div>
@@ -231,7 +231,7 @@ function createColorRow(min = 0, color = "#ffffff") {
   row.innerHTML = `
     <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
       <input type="number" class="color-min" value="${min}" min="0" max="100"
-        style="width: 50px; background:#2a2a2a; color:var(--text); border:1px solid var(--border); padding:4px; border-radius:4px;">
+        style="width: 50px; background:var(--surface-alt); color:var(--text); border:1px solid var(--border); padding:4px 6px; border-radius:6px; font-family:'DM Sans',system-ui,sans-serif;">
       <span style="font-size: 0.8rem; color: var(--text-dim);">%</span>
       <input type="color" class="color-val" value="${color}"
         style="width: 30px; height: 24px; border: none; background: none; cursor: pointer;">
@@ -329,7 +329,7 @@ window.onload = async () => {
   toggleInputs();
 
   addColorBtn.onclick = () =>
-    colorContainer.appendChild(createColorRow(0, "#4a90e2"));
+    colorContainer.appendChild(createColorRow(0, "#9d7dfc"));
 
   const version = await window.electronAPI?.getAppVersion();
   if (version) appVersionLabel.innerText = `Version: ${version}`;
