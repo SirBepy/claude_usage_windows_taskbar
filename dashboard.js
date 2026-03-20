@@ -368,15 +368,6 @@ refreshUpdateBtn.addEventListener("click", () => {
   updateStateLabel.innerText = "Checking for updates...";
   updateStateLabel.style.color = "var(--text-dim)";
   updateBtn.style.display = "none";
-
-  const updateInfo = document.getElementById("updateInfo");
-  const updateStatus = document.getElementById("updateStatus");
-  if (updateStatus) updateStatus.textContent = "Checking for updates...";
-  if (updateInfo) updateInfo.style.display = "block";
-
-  setTimeout(() => {
-    if (updateInfo) updateInfo.style.display = "none";
-  }, 5000);
 });
 
 copyLogsBtn.addEventListener("click", () => {
