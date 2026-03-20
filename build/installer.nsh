@@ -1,23 +1,38 @@
-; Custom close handler for tray apps.
+; ── Why this file exists ──────────────────────────────────────────────────────
 ;
-; Problem: the default NSIS CloseApplication plugin works by sending WM_CLOSE
-; to windows. A tray-only app has no windows, so the signal is ignored and the
-; installer shows "cannot be closed".
+; electron-builder's default NSIS close logic sends WM_CLOSE to windows.
+; A tray-only app has no windows, so the signal is ignored and the installer
+; shows "cannot be closed" even when the app appears to not be running.
 ;
-; Two-stage fix:
-;   1. Ask the app to quit gracefully via its HTTP hook server.
-;   2. Force-kill any surviving Electron processes via taskkill.
+; Two macros are used:
 ;
-; Everything runs through "cmd.exe /C" to avoid the WOW64 filesystem redirect
-; issue where $SYSDIR may point to SysWOW64 on a 32-bit NSIS process running
-; on a 64-bit OS. cmd.exe always resolves executables from the real PATH.
-!macro customCloseApplication
-  ; Stage 1 — graceful quit (app responds to POST /quit by calling app.quit())
+;   customInit           — runs in .onInit, BEFORE process detection.
+;                          Kills the app here so the detection finds nothing.
+;
+;   customCloseApplication — runs when detection finds the app still running
+;                          (e.g. on Retry). Belt-and-suspenders kill.
+;
+; All exec calls go through cmd.exe /C so the shell PATH resolves curl and
+; taskkill correctly regardless of NSIS process bitness / WOW64 redirects.
+; "2>nul & exit 0" suppresses errors when the process isn't found.
+
+!macro _killApp
+  ; 1. Graceful quit via hook server (app calls app.quit() on POST /quit)
   ExecWait '"$SYSDIR\cmd.exe" /C curl -s -m 3 -X POST http://127.0.0.1:27182/quit 2>nul & exit 0'
   Sleep 2500
 
-  ; Stage 2 — force-kill any surviving processes (/T = kill child processes too)
+  ; 2. Force-kill main process and any surviving Electron helper processes
   ExecWait '"$SYSDIR\cmd.exe" /C taskkill /F /T /IM "Claude Usage Taskbar Tool.exe" 2>nul & exit 0'
   ExecWait '"$SYSDIR\cmd.exe" /C taskkill /F /T /IM "Claude Usage Taskbar Tool Helper.exe" 2>nul & exit 0'
-  Sleep 1500
+  Sleep 2000
+!macroend
+
+; Runs inside .onInit — before electron-builder checks if the app is running
+!macro customInit
+  !insertmacro _killApp
+!macroend
+
+; Runs when the process-still-running dialog offers Retry
+!macro customCloseApplication
+  !insertmacro _killApp
 !macroend
