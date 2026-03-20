@@ -514,18 +514,25 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         // Determine coloring mode
         const colorMode = settings.colorOverlayMode ?? (settings.colorOverlayNumber ? "number" : "none");
         let textColor = [255, 255, 255];
+        let textX = x;
+        let textY = y;
 
         if (colorMode === "background") {
-          // Colored rounded-rect badge behind the number, white text on top
-          const bgColor = urgencyRGB(pct, settings);
-          const pad = 1;
-          drawRoundedRect(pixels, x - pad, y - pad, x + totalWidth + pad, y + font.height + pad, 3, bgColor, 230);
+          // Fixed square badge centered in the 22x22 canvas
+          const sq = SIZE - 4; // 18x18
+          const sqX1 = Math.floor((SIZE - sq) / 2);
+          const sqY1 = Math.floor((SIZE - sq) / 2);
+          const sqX2 = sqX1 + sq - 1;
+          const sqY2 = sqY1 + sq - 1;
+          drawRoundedRect(pixels, sqX1, sqY1, sqX2, sqY2, 3, urgencyRGB(pct, settings), 230);
+          textX = sqX1 + Math.max(0, Math.floor((sq - totalWidth) / 2));
+          textY = sqY1 + Math.max(0, Math.floor((sq - font.height) / 2));
         } else if (colorMode === "number") {
           textColor = urgencyRGB(pct, settings);
         }
         // "none" → white text, no background
 
-        drawText(pixels, str, x, y, textColor, style);
+        drawText(pixels, str, textX, textY, textColor, style);
       }
     }
   }
