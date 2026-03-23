@@ -52,7 +52,7 @@ const lineVisible = { session: true, weekly: true, expected: true };
 // ── Chart rendering ───────────────────────────────────────────────────────────
 function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
   const W = 420, H = 172;
-  const ML = 30, MR = 8, MT = 8, MB = 38;
+  const ML = 30, MR = 8, MT = 8, MB = 42;
   const PW = W - ML - MR;
   const PH = H - MT - MB;
 
@@ -67,7 +67,7 @@ function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
   const gridLines = [0, 25, 50, 75, 100].map((v) => {
     const y = py(v);
     return `<line x1="${ML}" x2="${W - MR}" y1="${y}" y2="${y}" stroke="#2d2c44" stroke-width="1"/>
-            <text x="${ML - 4}" y="${y + 3.5}" text-anchor="end" fill="#6b6990" font-size="8" font-family="Fira Code, monospace">${v}</text>`;
+            <text x="${ML - 4}" y="${y + 3.5}" text-anchor="end" fill="#6b6990" font-size="10" font-family="Fira Code, monospace">${v}</text>`;
   }).join("");
 
   // X-axis: tick + two-row label at each midnight within the window
@@ -80,8 +80,8 @@ function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
     const dateStr = (cursor.getMonth() + 1) + "/" + cursor.getDate();
     dayTicks.push(
       `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#2d2c44" stroke-width="1"/>` +
-      `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#6b6990" font-size="8" font-family="DM Sans, system-ui">${dayName}</text>` +
-      `<text x="${x}" y="${H - MB + 24}" text-anchor="middle" fill="#4a4870" font-size="7" font-family="DM Sans, system-ui">${dateStr}</text>`
+      `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#6b6990" font-size="10" font-family="DM Sans, system-ui">${dayName}</text>` +
+      `<text x="${x}" y="${H - MB + 26}" text-anchor="middle" fill="#4a4870" font-size="9" font-family="DM Sans, system-ui">${dateStr}</text>`
     );
     cursor.setDate(cursor.getDate() + 1);
   }

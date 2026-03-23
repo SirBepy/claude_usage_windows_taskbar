@@ -2,21 +2,6 @@
 
 <!-- last-id: 7 -->
 
-## [T-004] Increase dashboard graph item font size
-**Status:** planned
-**Added:** 2026-03-21
-**Description:** The font size of graph items (labels, values, etc.) in the dashboard should be increased for better readability.
-**Questions:**
-_(none)_
-
-**Plan:**
-1. In `buildChart()` in `dashboard.js`, increase y-axis label `font-size` from `8` to `10`.
-2. Increase x-axis day-name label `font-size` from `8` to `10`.
-3. Increase x-axis date label `font-size` from `7` to `9`.
-4. Increase bottom margin `MB` from `38` to `42` to accommodate the taller x-axis labels.
-
----
-
 ## [T-005] Add week pagination to dashboard
 **Status:** planned
 **Added:** 2026-03-21
