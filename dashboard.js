@@ -48,6 +48,8 @@ function fmtResetTime(isoStr) {
 
 // ── Chart state (persists across re-renders) ──────────────────────────────────
 const lineVisible = { session: true, weekly: true, expected: true };
+let weekOffset = 0;   // 0 = current week, 1 = one week back, etc.
+let lastHistory = null;
 
 // ── Chart rendering ───────────────────────────────────────────────────────────
 function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
@@ -143,7 +145,15 @@ function setupLegendToggles() {
 // ── Stats rendering ───────────────────────────────────────────────────────────
 const statsContent = document.getElementById("stats-content");
 
+function setupPaginationButtons() {
+  const prevBtn = document.getElementById("prev-week");
+  const nextBtn = document.getElementById("next-week");
+  if (prevBtn) prevBtn.onclick = () => { weekOffset++; renderHistory(lastHistory); };
+  if (nextBtn) nextBtn.onclick = () => { weekOffset = Math.max(0, weekOffset - 1); renderHistory(lastHistory); };
+}
+
 function renderHistory(history) {
+  lastHistory = history;
   if (!history || history.length === 0) {
     statsContent.innerHTML = `<div class="no-data">No history recorded yet.<br><small style="font-size:0.8rem">Data appears after the first successful refresh.</small></div>`;
     return;
@@ -158,6 +168,12 @@ function renderHistory(history) {
     ? new Date(latest.weekly_resets_at).getTime()
     : Date.now() + 3_600_000;
   const weeklyStartMs = weeklyEndMs - 7 * 24 * 3_600_000;
+
+  // Apply week offset for pagination
+  const shiftMs = weekOffset * 7 * 24 * 3_600_000;
+  const shiftedEndMs = weeklyEndMs - shiftMs;
+  const shiftedStartMs = weeklyStartMs - shiftMs;
+  const hasPrev = history.some((r) => { const t = hourToMs(r.hour); return t >= shiftedStartMs - 7 * 24 * 3_600_000 && t < shiftedStartMs; });
 
   // Safe pace: % of window time elapsed, clamped 0-100
   const sessionResetMs = latest.session_resets_at ? new Date(latest.session_resets_at).getTime() : null;
@@ -204,23 +220,29 @@ function renderHistory(history) {
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>
+    <div class="chart-pagination">
+      <button id="prev-week" class="btn-secondary" ${hasPrev ? "" : "disabled"}>◀</button>
+      <span class="chart-pagination-label">${weekOffset === 0 ? "This week" : `${weekOffset}w ago`}</span>
+      <button id="next-week" class="btn-secondary" ${weekOffset === 0 ? "disabled" : ""}>▶</button>
+    </div>
     <div class="chart-container">
       <div class="chart-legend">
         ${legendItem("legend-session", "#9d7dfc", false, "Session")}
       </div>
-      ${buildChart(history, weeklyStartMs, weeklyEndMs, "s", "chart-session")}
+      ${buildChart(history, shiftedStartMs, shiftedEndMs, "s", "chart-session")}
     </div>
     <div class="chart-container">
       <div class="chart-legend">
         ${legendItem("legend-weekly",   "#6e8fff", false, "Weekly")}
         ${legendItem("legend-expected", "#6b6990", true,  "Expected")}
       </div>
-      ${buildChart(history, weeklyStartMs, weeklyEndMs, "w", "chart-weekly")}
+      ${buildChart(history, shiftedStartMs, shiftedEndMs, "w", "chart-weekly")}
     </div>
   `;
 
   setupLegendToggles();
   applyLineVisibility();
+  setupPaginationButtons();
 }
 
 window.electronAPI?.getUsageHistory().then(renderHistory);

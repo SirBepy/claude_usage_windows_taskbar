@@ -2,24 +2,6 @@
 
 <!-- last-id: 7 -->
 
-## [T-005] Add week pagination to dashboard
-**Status:** planned
-**Added:** 2026-03-21
-**Description:** Add left/right pagination controls to the dashboard so the user can navigate to previous weeks and view their historical usage graphs.
-**Questions:**
-_(none)_
-
-**Plan:**
-1. In `history.js`, change `retainedDays()` to keep 35 days (5 weeks) instead of 7. Update the loop from `i < 7` to `i < 35`.
-2. In `dashboard.js`, add a `let weekOffset = 0` state variable (0 = current week, 1 = one week back, etc.).
-3. Add prev/next pagination buttons to the chart area header (e.g. `◀ Week  ▶`). Style consistently with existing icon buttons.
-4. Compute the displayed week's bounds: `const shiftMs = weekOffset * 7 * 24 * 3_600_000`, then `weeklyEndMs -= shiftMs` and `weeklyStartMs -= shiftMs`.
-5. Filter `history` to records within `[weeklyStartMs, weeklyEndMs]` before passing to `buildChart()`.
-6. Disable the next (▶) button when `weekOffset === 0`. Disable prev (◀) when no history data exists in the previous window.
-7. Note: history is already stored per-hour bucket (poll is every 60 min), so no compression is needed.
-
----
-
 ## [T-006] Add cache cleanup on startup
 **Status:** planned
 **Added:** 2026-03-21

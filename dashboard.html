@@ -159,6 +159,34 @@
             align-items: center;
         }
 
+        /* ── Chart pagination ── */
+        .chart-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .chart-pagination-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            font-family: 'DM Sans', system-ui, sans-serif;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .chart-pagination button {
+            padding: 3px 10px;
+            font-size: 0.75rem;
+        }
+
+        .chart-pagination button:disabled {
+            opacity: 0.3;
+            cursor: default;
+            pointer-events: none;
+        }
+
         /* ── Chart ── */
         .chart-container {
             background: var(--surface);

@@ -33,7 +33,7 @@ function localDateStr(date) {
 function retainedDays() {
   const days = new Set();
   const now = new Date();
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 35; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
     days.add(localDateStr(d));
   }
@@ -99,7 +99,7 @@ function recordSnapshot(usageData) {
     history.push(record);
   }
 
-  // Prune to the fixed 7 local calendar-day window
+  // Prune to the fixed 35 local calendar-day window (5 weeks for pagination)
   const keep = retainedDays();
   history = history.filter((r) => {
     // Extract date portion from "YYYY-MM-DDTHH"
