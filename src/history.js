@@ -120,4 +120,29 @@ function recordSnapshot(usageData) {
   return history;
 }
 
-module.exports = { recordSnapshot, loadHistory };
+/**
+ * Prunes history to records on or after the start of the calendar week
+ * that is 5 full weeks ago. Called once on app startup.
+ */
+function pruneHistory() {
+  let history = loadHistory();
+  if (history.length === 0) return;
+
+  const now = new Date();
+  const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+  const cutoff = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() - 5 * 7);
+  const cutoffStr = localDateStr(cutoff);
+
+  history = history.filter((r) => {
+    const datePart = r.hour ? r.hour.slice(0, 10) : null;
+    return datePart && datePart >= cutoffStr;
+  });
+
+  try {
+    fs.writeFileSync(HISTORY_PATH, JSON.stringify(history, null, 2));
+  } catch (e) {
+    console.error("Failed to prune usage history:", e);
+  }
+}
+
+module.exports = { recordSnapshot, loadHistory, pruneHistory };

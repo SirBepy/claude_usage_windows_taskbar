@@ -31,7 +31,7 @@ const {
   buildTooltip,
 } = require("./src/usage-parser");
 const { fetchUsageFromPage } = require("./src/scraper");
-const { recordSnapshot, loadHistory } = require("./src/history");
+const { recordSnapshot, loadHistory, pruneHistory } = require("./src/history");
 const { clearClaudeCookies } = require("./src/session");
 const { loadSettings, saveSettings } = require("./src/settings");
 const {
@@ -414,6 +414,7 @@ async function logout() {
 app.whenReady().then(async () => {
   if (process.platform === "darwin") app.dock.hide();
   app.setAppUserModelId("Claude Usage Taskbar Tool");
+  pruneHistory();
 
   createTray();
   setupAutoUpdater(() => {
