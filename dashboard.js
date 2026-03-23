@@ -48,8 +48,10 @@ function fmtResetTime(isoStr) {
 
 // ── Chart state (persists across re-renders) ──────────────────────────────────
 const lineVisible = { session: true, weekly: true, expected: true };
-let weekOffset = 0;   // 0 = current week, 1 = one week back, etc.
+let sessionPageOffset = 0;  // 0 = current session window, 1 = one window back, etc.
+let weeklyPageOffset = 0;   // 0 = current week, 1 = one week back, etc.
 let lastHistory = null;
+let currentSettings = {};
 
 // ── Chart rendering ───────────────────────────────────────────────────────────
 function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
@@ -72,20 +74,36 @@ function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
             <text x="${ML - 4}" y="${y + 3.5}" text-anchor="end" fill="#6b6990" font-size="10" font-family="Fira Code, monospace">${v}</text>`;
   }).join("");
 
-  // X-axis: tick + two-row label at each midnight within the window
-  const dayTicks = [];
-  const cursor = new Date(weeklyStartMs);
-  cursor.setHours(24, 0, 0, 0); // advance to first midnight after weeklyStart
-  while (cursor.getTime() <= weeklyEndMs) {
-    const x = px(cursor.getTime()).toFixed(1);
-    const dayName = cursor.toLocaleDateString("en-US", { weekday: "short" });
-    const dateStr = (cursor.getMonth() + 1) + "/" + cursor.getDate();
-    dayTicks.push(
-      `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#2d2c44" stroke-width="1"/>` +
-      `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#6b6990" font-size="10" font-family="DM Sans, system-ui">${dayName}</text>` +
-      `<text x="${x}" y="${H - MB + 26}" text-anchor="middle" fill="#4a4870" font-size="9" font-family="DM Sans, system-ui">${dateStr}</text>`
-    );
-    cursor.setDate(cursor.getDate() + 1);
+  // X-axis ticks: hours for short windows (≤12h), days for longer ones
+  const tickItems = [];
+  const windowMs = maxT - minT;
+  if (windowMs <= 12 * 3_600_000) {
+    const hourMs = 3_600_000;
+    const firstTick = Math.ceil(minT / hourMs) * hourMs;
+    for (let t = firstTick; t <= maxT; t += hourMs) {
+      const x = px(t).toFixed(1);
+      const d = new Date(t);
+      const hh = d.getHours().toString().padStart(2, "0");
+      const mm = d.getMinutes().toString().padStart(2, "0");
+      tickItems.push(
+        `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#2d2c44" stroke-width="1"/>` +
+        `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#6b6990" font-size="10" font-family="DM Sans, system-ui">${hh}:${mm}</text>`
+      );
+    }
+  } else {
+    const cursor = new Date(minT);
+    cursor.setHours(24, 0, 0, 0); // advance to first midnight after minT
+    while (cursor.getTime() <= maxT) {
+      const x = px(cursor.getTime()).toFixed(1);
+      const dayName = cursor.toLocaleDateString("en-US", { weekday: "short" });
+      const dateStr = (cursor.getMonth() + 1) + "/" + cursor.getDate();
+      tickItems.push(
+        `<line x1="${x}" x2="${x}" y1="${MT + PH}" y2="${MT + PH + 4}" stroke="#2d2c44" stroke-width="1"/>` +
+        `<text x="${x}" y="${H - MB + 14}" text-anchor="middle" fill="#6b6990" font-size="10" font-family="DM Sans, system-ui">${dayName}</text>` +
+        `<text x="${x}" y="${H - MB + 26}" text-anchor="middle" fill="#4a4870" font-size="9" font-family="DM Sans, system-ui">${dateStr}</text>`
+      );
+      cursor.setDate(cursor.getDate() + 1);
+    }
   }
 
   // Reference diagonal: (weeklyStart, 0%) → (weeklyEnd, 100%)
@@ -114,7 +132,7 @@ function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
     `<svg id="${svgId}" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">` +
     gridLines +
     `<line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#2d2c44" stroke-width="1"/>` +
-    dayTicks.join("") +
+    tickItems.join("") +
     (lineKey === "w" ? refLine : "") +
     (lineKey === "s" ? makeLine("s", "#9d7dfc", "line-session") : makeLine("w", "#6e8fff", "line-weekly")) +
     `</svg>`
@@ -146,10 +164,14 @@ function setupLegendToggles() {
 const statsContent = document.getElementById("stats-content");
 
 function setupPaginationButtons() {
-  const prevBtn = document.getElementById("prev-week");
-  const nextBtn = document.getElementById("next-week");
-  if (prevBtn) prevBtn.onclick = () => { weekOffset++; renderHistory(lastHistory); };
-  if (nextBtn) nextBtn.onclick = () => { weekOffset = Math.max(0, weekOffset - 1); renderHistory(lastHistory); };
+  const prevSession = document.getElementById("prev-session");
+  const nextSession = document.getElementById("next-session");
+  const prevWeekly = document.getElementById("prev-weekly");
+  const nextWeekly = document.getElementById("next-weekly");
+  if (prevSession) prevSession.onclick = () => { sessionPageOffset++; renderHistory(lastHistory); };
+  if (nextSession) nextSession.onclick = () => { sessionPageOffset = Math.max(0, sessionPageOffset - 1); renderHistory(lastHistory); };
+  if (prevWeekly) prevWeekly.onclick = () => { weeklyPageOffset++; renderHistory(lastHistory); };
+  if (nextWeekly) nextWeekly.onclick = () => { weeklyPageOffset = Math.max(0, weeklyPageOffset - 1); renderHistory(lastHistory); };
 }
 
 function renderHistory(history) {
@@ -169,11 +191,25 @@ function renderHistory(history) {
     : Date.now() + 3_600_000;
   const weeklyStartMs = weeklyEndMs - 7 * 24 * 3_600_000;
 
-  // Apply week offset for pagination
-  const shiftMs = weekOffset * 7 * 24 * 3_600_000;
-  const shiftedEndMs = weeklyEndMs - shiftMs;
-  const shiftedStartMs = weeklyStartMs - shiftMs;
-  const hasPrev = history.some((r) => { const t = hourToMs(r.hour); return t >= shiftedStartMs - 7 * 24 * 3_600_000 && t < shiftedStartMs; });
+  // Session window bounds (5-hour)
+  const SESSION_MS = 5 * 3_600_000;
+  const sessionEndMs = latest.session_resets_at
+    ? new Date(latest.session_resets_at).getTime()
+    : Date.now() + 3_600_000;
+  const sessionBaseStartMs = sessionEndMs - SESSION_MS;
+
+  // Per-chart pagination offsets
+  const WEEK_MS = 7 * 24 * 3_600_000;
+
+  const sessionShiftMs = sessionPageOffset * SESSION_MS;
+  const shiftedSessionEndMs = sessionEndMs - sessionShiftMs;
+  const shiftedSessionStartMs = sessionBaseStartMs - sessionShiftMs;
+  const hasSessionPrev = history.some((r) => { const t = hourToMs(r.hour); return t >= shiftedSessionStartMs - SESSION_MS && t < shiftedSessionStartMs; });
+
+  const weeklyShiftMs = weeklyPageOffset * WEEK_MS;
+  const shiftedWeeklyEndMs = weeklyEndMs - weeklyShiftMs;
+  const shiftedWeeklyStartMs = weeklyStartMs - weeklyShiftMs;
+  const hasWeeklyPrev = history.some((r) => { const t = hourToMs(r.hour); return t >= shiftedWeeklyStartMs - WEEK_MS && t < shiftedWeeklyStartMs; });
 
   // Safe pace: % of window time elapsed, clamped 0-100
   const sessionResetMs = latest.session_resets_at ? new Date(latest.session_resets_at).getTime() : null;
@@ -193,6 +229,7 @@ function renderHistory(history) {
     <div class="stat-cards">
       <div class="stat-card">
         <div class="stat-label">Session (5h)</div>
+        ${currentSettings.showSafePace !== false ? `
         <div class="stat-values-row">
           <div class="stat-col">
             <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
@@ -202,11 +239,13 @@ function renderHistory(history) {
             <div class="stat-value" style="color:var(--text-dim)">${fmtPct(sessionSafePct)}</div>
             <div class="stat-sublabel">safe pace</div>
           </div>
-        </div>
+        </div>` : `
+        <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>`}
         ${sessionReset ? `<div class="stat-sublabel">${sessionReset}</div>` : ""}
       </div>
       <div class="stat-card">
         <div class="stat-label">Weekly (7d)</div>
+        ${currentSettings.showSafePace !== false ? `
         <div class="stat-values-row">
           <div class="stat-col">
             <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
@@ -216,27 +255,33 @@ function renderHistory(history) {
             <div class="stat-value" style="color:var(--text-dim)">${fmtPct(weeklySafePct)}</div>
             <div class="stat-sublabel">safe pace</div>
           </div>
-        </div>
+        </div>` : `
+        <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>`}
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>
-    <div class="chart-pagination">
-      <button id="prev-week" class="btn-secondary" ${hasPrev ? "" : "disabled"}>◀</button>
-      <span class="chart-pagination-label">${weekOffset === 0 ? "This week" : `${weekOffset}w ago`}</span>
-      <button id="next-week" class="btn-secondary" ${weekOffset === 0 ? "disabled" : ""}>▶</button>
-    </div>
-    <div class="chart-container">
+    <div class="chart-container" style="margin-bottom: 12px;">
+      <div class="chart-pagination">
+        <button id="prev-session" class="btn-secondary" ${hasSessionPrev ? "" : "disabled"}>◀</button>
+        <span class="chart-pagination-label">${sessionPageOffset === 0 ? "This session" : `${sessionPageOffset} session${sessionPageOffset > 1 ? "s" : ""} ago`}</span>
+        <button id="next-session" class="btn-secondary" ${sessionPageOffset === 0 ? "disabled" : ""}>▶</button>
+      </div>
       <div class="chart-legend">
         ${legendItem("legend-session", "#9d7dfc", false, "Session")}
       </div>
-      ${buildChart(history, shiftedStartMs, shiftedEndMs, "s", "chart-session")}
+      ${buildChart(history, shiftedSessionStartMs, shiftedSessionEndMs, "s", "chart-session")}
     </div>
     <div class="chart-container">
+      <div class="chart-pagination">
+        <button id="prev-weekly" class="btn-secondary" ${hasWeeklyPrev ? "" : "disabled"}>◀</button>
+        <span class="chart-pagination-label">${weeklyPageOffset === 0 ? "This week" : `${weeklyPageOffset}w ago`}</span>
+        <button id="next-weekly" class="btn-secondary" ${weeklyPageOffset === 0 ? "disabled" : ""}>▶</button>
+      </div>
       <div class="chart-legend">
         ${legendItem("legend-weekly",   "#6e8fff", false, "Weekly")}
         ${legendItem("legend-expected", "#6b6990", true,  "Expected")}
       </div>
-      ${buildChart(history, shiftedStartMs, shiftedEndMs, "w", "chart-weekly")}
+      ${buildChart(history, shiftedWeeklyStartMs, shiftedWeeklyEndMs, "w", "chart-weekly")}
     </div>
   `;
 
@@ -261,6 +306,7 @@ const overlayStyleSection = document.getElementById("overlayStyleSection");
 const colorOverlayMode = document.getElementById("colorOverlayMode");
 const colorOverlayModeSection = document.getElementById("colorOverlayModeSection");
 const launchAtLogin = document.getElementById("launchAtLogin");
+const showSafePace = document.getElementById("showSafePace");
 const estimateTokens = document.getElementById("estimateTokens");
 const sessionPlan = document.getElementById("sessionPlan");
 const weeklyPlan = document.getElementById("weeklyPlan");
@@ -360,7 +406,9 @@ window.onload = async () => {
     overlayStyle.value = settings.overlayStyle || "classic";
     colorOverlayMode.value = settings.colorOverlayMode || "number";
     launchAtLogin.checked = settings.launchAtLogin || false;
+    showSafePace.checked = settings.showSafePace !== false;
     estimateTokens.checked = settings.estimateTokens || false;
+    currentSettings = settings;
     sessionPlan.value = settings.sessionPlan || 44000;
     weeklyPlan.value = settings.weeklyPlan || 200000;
     (settings.colorThresholds || []).forEach((t) =>
@@ -398,6 +446,7 @@ saveBtn.onclick = () => {
     overlayStyle: overlayStyle.value,
     colorOverlayMode: colorOverlayMode.value,
     launchAtLogin: launchAtLogin.checked,
+    showSafePace: showSafePace.checked,
     estimateTokens: estimateTokens.checked,
     sessionPlan: parseInt(sessionPlan.value, 10),
     weeklyPlan: parseInt(weeklyPlan.value, 10),
@@ -408,7 +457,9 @@ saveBtn.onclick = () => {
       }))
       .sort((a, b) => a.min - b.min),
   };
+  currentSettings = settings;
   window.electronAPI?.saveSettings(settings);
+  renderHistory(lastHistory);
   showView("dashboard");
 };
 
