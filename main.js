@@ -143,7 +143,7 @@ function resetDisplayMode() {
   updateTray();
 }
 
-const POLL_MS = 60 * 60 * 1000;
+const POLL_MS = 30 * 60 * 1000;
 
 // ── Usage fetching ────────────────────────────────────────────────────────────
 async function fetchUsage() {
