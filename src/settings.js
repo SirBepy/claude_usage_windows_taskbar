@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   timeStyle: "absolute", // "absolute" | "countdown"
   launchAtLogin: false,
   estimateTokens: false,
+  showSafePace: true,
   sessionPlan: 44000,
   weeklyPlan: 200000,
   displayMode: "both", // "icon" | "number" | "both"
