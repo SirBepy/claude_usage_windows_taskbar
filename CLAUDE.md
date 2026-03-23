@@ -18,11 +18,19 @@ npm start
 | File | Role |
 |---|---|
 | `main.js` | App lifecycle, tray, windows, polling, IPC |
-| `src/icon.js` | Runtime PNG generation — dual progress ring + spin animation |
-| `src/updater.js` | Auto-update wrapper around `electron-updater`; skips in dev mode |
-| `src/usage-parser.js` | Parses `five_hour` / `seven_day` fields from usage API response |
-| `src/scraper.js` | Fetches usage data via hidden BrowserWindow + CDP Fetch interception |
-| `src/session.js` | `clearClaudeCookies()` |
+| `src/core/icon.js` | Runtime PNG generation — dual progress ring + spin animation |
+| `src/core/updater.js` | Auto-update wrapper around `electron-updater`; skips in dev mode |
+| `src/core/usage-parser.js` | Parses `five_hour` / `seven_day` fields from usage API response |
+| `src/core/scraper.js` | Fetches usage data via hidden BrowserWindow + CDP Fetch interception |
+| `src/core/session.js` | `clearClaudeCookies()` |
+| `src/core/history.js` | Snapshot persistence — read/write/prune usage history |
+| `src/core/settings.js` | Load/save user settings to disk |
+| `src/renderer/dashboard.html` | Dashboard + settings UI (single-file SPA) |
+| `src/renderer/dashboard.js` | Dashboard renderer logic |
+| `src/renderer/preload.js` | Electron contextBridge — exposes IPC to renderer |
+| `src/assets/icon.png` | App icon (512×512, for window chrome and installer) |
+| `src/assets/icon.svg` | Source SVG for icon generation |
+| `scripts/generate-icons.js` | Dev utility — regenerates icon.png from icon.svg via sharp |
 
 ## Authentication flow
 
@@ -34,7 +42,7 @@ npm start
 ## Usage scraping
 
 Instead of calling the API directly (which requires replicating browser auth headers),
-`fetchUsageFromPage()` in `src/scraper.js`:
+`fetchUsageFromPage()` in `src/core/scraper.js`:
 
 1. Opens a hidden `BrowserWindow` (never shown to the user).
 2. Enables the **CDP Fetch domain** with a URL pattern matching `*/api/organizations/*/usage`.
@@ -62,7 +70,7 @@ A redirect to `/login` during navigation signals an expired session (rejects wit
 ## Tray icon
 
 Generated at runtime as a 22×22 RGBA PNG using only Node built-ins (`zlib` + `Buffer`).
-No image files on disk. Rendered in `src/icon.js`.
+No image files on disk. Rendered in `src/core/icon.js`.
 
 **Normal state** — dual concentric progress rings:
 - Outer ring (r 7.5–10.5): session utilisation

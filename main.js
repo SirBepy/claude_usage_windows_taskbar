@@ -24,22 +24,22 @@ const hookServer = http.createServer((req, res) => {
 });
 hookServer.listen(HOOK_SERVER_PORT, "127.0.0.1");
 
-const { makeIcon, makeSpinFrame } = require("./src/icon");
+const { makeIcon, makeSpinFrame } = require("./src/core/icon");
 const {
   parseSessionPct,
   parseWeeklyPct,
   buildTooltip,
-} = require("./src/usage-parser");
-const { fetchUsageFromPage } = require("./src/scraper");
-const { recordSnapshot, loadHistory, pruneHistory } = require("./src/history");
-const { clearClaudeCookies } = require("./src/session");
-const { loadSettings, saveSettings } = require("./src/settings");
+} = require("./src/core/usage-parser");
+const { fetchUsageFromPage } = require("./src/core/scraper");
+const { recordSnapshot, loadHistory, pruneHistory } = require("./src/core/history");
+const { clearClaudeCookies } = require("./src/core/session");
+const { loadSettings, saveSettings } = require("./src/core/settings");
 const {
   setupAutoUpdater,
   getUpdateState,
   quitAndInstall,
   downloadUpdate,
-} = require("./src/updater");
+} = require("./src/core/updater");
 const { clipboard } = require("electron");
 
 // ── Log Buffer ────────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ function showLoginWindow() {
     width: 1024,
     height: 768,
     title: "Sign in to Claude",
-    icon: path.join(__dirname, "src", "icon.png"),
+    icon: path.join(__dirname, "src", "assets", "icon.png"),
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -357,7 +357,7 @@ function showDashboardWindow() {
     width: 480,
     height: 700,
     title: "Claude Usage",
-    icon: path.join(__dirname, "src", "icon.png"),
+    icon: path.join(__dirname, "src", "assets", "icon.png"),
     resizable: true,
     backgroundColor: "#121212",
     autoHideMenuBar: true,
@@ -365,12 +365,12 @@ function showDashboardWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "src", "renderer", "preload.js"),
     },
   });
 
   dashboardWindow.setMenuBarVisibility(false);
-  dashboardWindow.loadFile(path.join(__dirname, "dashboard.html"));
+  dashboardWindow.loadFile(path.join(__dirname, "src", "renderer", "dashboard.html"));
 
   dashboardWindow.on("closed", () => {
     dashboardWindow = null;

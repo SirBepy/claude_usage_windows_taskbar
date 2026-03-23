@@ -2,9 +2,9 @@ const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
 
-const svgPath = path.join(__dirname, "src", "icon.svg");
-const srcPngPath = path.join(__dirname, "src", "icon.png");
-const buildDir = path.join(__dirname, "build");
+const svgPath = path.join(__dirname, "..", "src", "assets", "icon.svg");
+const srcPngPath = path.join(__dirname, "..", "src", "assets", "icon.png");
+const buildDir = path.join(__dirname, "..", "build");
 const buildPngPath = path.join(buildDir, "icon.png");
 
 async function generateIcons() {

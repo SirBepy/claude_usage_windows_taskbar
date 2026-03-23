@@ -47,9 +47,6 @@
     "files": [
       "main.js",
       "src/**",
-      "preload.js",
-      "dashboard.html",
-      "dashboard.js",
       "README.md",
       "CLAUDE.md",
       "node_modules/**",
