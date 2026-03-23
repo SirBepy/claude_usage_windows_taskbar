@@ -50,7 +50,7 @@ function fmtResetTime(isoStr) {
 const lineVisible = { session: true, weekly: true, expected: true };
 
 // ── Chart rendering ───────────────────────────────────────────────────────────
-function buildChart(history, weeklyStartMs, weeklyEndMs) {
+function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
   const W = 420, H = 172;
   const ML = 30, MR = 8, MT = 8, MB = 38;
   const PW = W - ML - MR;
@@ -109,23 +109,20 @@ function buildChart(history, weeklyStartMs, weeklyEndMs) {
   }
 
   return (
-    `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">` +
+    `<svg id="${svgId}" viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">` +
     gridLines +
     `<line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#2d2c44" stroke-width="1"/>` +
     dayTicks.join("") +
-    refLine +
-    makeLine("s", "#9d7dfc", "line-session") +
-    makeLine("w", "#6e8fff", "line-weekly") +
+    (lineKey === "w" ? refLine : "") +
+    (lineKey === "s" ? makeLine("s", "#9d7dfc", "line-session") : makeLine("w", "#6e8fff", "line-weekly")) +
     `</svg>`
   );
 }
 
 // ── Line visibility ───────────────────────────────────────────────────────────
 function applyLineVisibility() {
-  const svg = statsContent.querySelector("svg");
-  if (!svg) return;
   for (const key of ["session", "weekly", "expected"]) {
-    const el = svg.querySelector(`#line-${key}`);
+    const el = document.getElementById(`line-${key}`);
     if (el) el.style.display = lineVisible[key] ? "" : "none";
     const leg = document.getElementById(`legend-${key}`);
     if (leg) leg.style.opacity = lineVisible[key] ? "1" : "0.35";
@@ -162,8 +159,6 @@ function renderHistory(history) {
     : Date.now() + 3_600_000;
   const weeklyStartMs = weeklyEndMs - 7 * 24 * 3_600_000;
 
-  const chartSvg = buildChart(history, weeklyStartMs, weeklyEndMs);
-
   const legendItem = (id, color, isDashed, label) => {
     const dot = isDashed
       ? `<span style="display:inline-block;width:14px;height:2px;background:${color};vertical-align:middle;margin-right:4px;border-radius:1px;border-top:2px dashed ${color};"></span>`
@@ -186,11 +181,16 @@ function renderHistory(history) {
     </div>
     <div class="chart-container">
       <div class="chart-legend">
-        ${legendItem("legend-session",  "#9d7dfc", false, "Session")}
+        ${legendItem("legend-session", "#9d7dfc", false, "Session")}
+      </div>
+      ${buildChart(history, weeklyStartMs, weeklyEndMs, "s", "chart-session")}
+    </div>
+    <div class="chart-container">
+      <div class="chart-legend">
         ${legendItem("legend-weekly",   "#6e8fff", false, "Weekly")}
         ${legendItem("legend-expected", "#6b6990", true,  "Expected")}
       </div>
-      ${chartSvg}
+      ${buildChart(history, weeklyStartMs, weeklyEndMs, "w", "chart-weekly")}
     </div>
   `;
 

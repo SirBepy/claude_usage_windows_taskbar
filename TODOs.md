@@ -2,24 +2,6 @@
 
 <!-- last-id: 7 -->
 
-## [T-002] Separate session and weekly graphs
-**Status:** planned
-**Added:** 2026-03-21
-**Description:** Session and weekly utilization should not be shown on the same graph - they need to be separated into two chart sections within the dashboard window.
-**Questions:**
-- [x] Should they be two separate tray icons, two separate popup windows, or two separate sections within one popup?: "two sections within one popup window"
-- [x] Is this about the tray icon rings, a popup/dashboard graph, or both?: "the dashboard graph (the one with 3 lines)"
-
-**Plan:**
-1. Refactor `buildChart()` in `dashboard.js` to accept a `lineKey` parameter (`"s"` or `"w"`) and only render that line.
-2. In `renderHistory()`, render two `.chart-container` divs stacked vertically, each with its own legend.
-   - Session chart: session line only, legend label "Session".
-   - Weekly chart: weekly line + expected dashed line, legends "Weekly" and "Expected".
-3. Both charts share the same x-axis bounds (the 7-day weekly window).
-4. Update `lineVisible` state keys and `applyLineVisibility()` to target each chart's SVG by ID independently.
-
----
-
 ## [T-003] Show safe pace indicator in dashboard
 **Status:** planned
 **Added:** 2026-03-21
