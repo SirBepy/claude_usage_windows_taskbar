@@ -2,19 +2,6 @@
 
 <!-- last-id: 7 -->
 
-## [T-001] Fix stale weekly graph on week rollover
-**Status:** planned
-**Added:** 2026-03-21
-**Description:** When the week passes, the previous week's graph is still being shown but rendered outside/off the window or graph bounds.
-**Questions:**
-_(none)_
-
-**Plan:**
-1. In `dashboard.js`, `buildChart()`: after building `pts`, filter to only include points where `t >= minT && t <= maxT` before passing to `makeLine()`.
-2. This prevents old hourly records from the previous weekly window from being plotted outside the SVG's visible x range (which had been leaking outside due to `overflow:visible`).
-
----
-
 ## [T-002] Separate session and weekly graphs
 **Status:** planned
 **Added:** 2026-03-21

@@ -93,8 +93,10 @@ function buildChart(history, weeklyStartMs, weeklyEndMs) {
     ` x2="${px(maxT).toFixed(1)}" y2="${py(100).toFixed(1)}"` +
     ` stroke="#6b6990" stroke-width="1.5" stroke-dasharray="5,4"/>`;
 
-  // Data polylines
-  const pts = history.map((r) => ({ t: hourToMs(r.hour), s: r.session_pct, w: r.weekly_pct }));
+  // Data polylines — clamp to window bounds to prevent old records leaking outside the SVG
+  const pts = history
+    .map((r) => ({ t: hourToMs(r.hour), s: r.session_pct, w: r.weekly_pct }))
+    .filter((p) => p.t >= minT && p.t <= maxT);
 
   function makeLine(key, color, id) {
     const f = pts.filter((p) => p[key] !== null && p[key] !== undefined);
