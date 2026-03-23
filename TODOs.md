@@ -2,30 +2,6 @@
 
 <!-- last-id: 7 -->
 
-## [T-003] Show safe pace indicator in dashboard
-**Status:** planned
-**Added:** 2026-03-21
-**Description:** Next to each utilization percentage in the dashboard, show what percentage would be "safe" to be at right now based on time elapsed in the window (e.g. halfway through the session = 50% safe). The name for this metric is "Safe Pace".
-**Questions:**
-- [x] What should this indicator be called? Options: "safe pace", "expected", "on track", "pace", or something else?: "Safe Pace"
-- [x] How should it be displayed in the stat card?: "Two values side by side — current % on the left, safe pace % on the right, each with a small label beneath (current / safe pace). Reset time sublabel spans the bottom."
-
-**Plan:**
-1. Compute safe pace for each window:
-   - Session: `Math.round(elapsedMs / (5 * 3_600_000) * 100)` where `elapsedMs = sessionEndMs - Date.now()` (clamped 0-100).
-   - Weekly: `Math.round(elapsedMs / (7 * 24 * 3_600_000) * 100)` where `elapsedMs = weeklyEndMs - Date.now()` (clamped 0-100).
-2. Rework each `.stat-card` in `renderHistory()` to show two values side by side:
-   ```
-   Session (5h)
-   17%          50%
-   current      safe pace    ← very small dim text
-   resets in 2h 35m
-   ```
-3. Use a two-column flex row inside the card for the values + sublabels. The reset time sits below spanning full width.
-4. "current" and "safe pace" labels use the existing `.stat-sublabel` style or smaller variant.
-
----
-
 ## [T-004] Increase dashboard graph item font size
 **Status:** planned
 **Added:** 2026-03-21

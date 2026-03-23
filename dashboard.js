@@ -159,6 +159,13 @@ function renderHistory(history) {
     : Date.now() + 3_600_000;
   const weeklyStartMs = weeklyEndMs - 7 * 24 * 3_600_000;
 
+  // Safe pace: % of window time elapsed, clamped 0-100
+  const sessionResetMs = latest.session_resets_at ? new Date(latest.session_resets_at).getTime() : null;
+  const sessionSafePct = sessionResetMs !== null
+    ? Math.max(0, Math.min(100, Math.round((5 * 3_600_000 - (sessionResetMs - Date.now())) / (5 * 3_600_000) * 100)))
+    : null;
+  const weeklySafePct = Math.max(0, Math.min(100, Math.round((7 * 24 * 3_600_000 - (weeklyEndMs - Date.now())) / (7 * 24 * 3_600_000) * 100)));
+
   const legendItem = (id, color, isDashed, label) => {
     const dot = isDashed
       ? `<span style="display:inline-block;width:14px;height:2px;background:${color};vertical-align:middle;margin-right:4px;border-radius:1px;border-top:2px dashed ${color};"></span>`
@@ -170,12 +177,30 @@ function renderHistory(history) {
     <div class="stat-cards">
       <div class="stat-card">
         <div class="stat-label">Session (5h)</div>
-        <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
+        <div class="stat-values-row">
+          <div class="stat-col">
+            <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
+            <div class="stat-sublabel">current</div>
+          </div>
+          <div class="stat-col">
+            <div class="stat-value" style="color:var(--text-dim)">${fmtPct(sessionSafePct)}</div>
+            <div class="stat-sublabel">safe pace</div>
+          </div>
+        </div>
         ${sessionReset ? `<div class="stat-sublabel">${sessionReset}</div>` : ""}
       </div>
       <div class="stat-card">
         <div class="stat-label">Weekly (7d)</div>
-        <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
+        <div class="stat-values-row">
+          <div class="stat-col">
+            <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
+            <div class="stat-sublabel">current</div>
+          </div>
+          <div class="stat-col">
+            <div class="stat-value" style="color:var(--text-dim)">${fmtPct(weeklySafePct)}</div>
+            <div class="stat-sublabel">safe pace</div>
+          </div>
+        </div>
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>
