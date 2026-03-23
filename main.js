@@ -241,9 +241,14 @@ function buildContextMenu() {
       { label: `Restart to update to v${version}`, click: quitAndInstall },
       { type: "separator" },
     );
+  } else if (state === "downloading") {
+    template.unshift(
+      { label: `Downloading v${version}…`, enabled: false },
+      { type: "separator" },
+    );
   } else if (state === "available") {
     template.unshift(
-      { label: `Downloading update v${version}…`, enabled: false },
+      { label: `Update available: v${version}`, click: downloadUpdate },
       { type: "separator" },
     );
   }
