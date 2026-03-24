@@ -255,6 +255,45 @@
             color: var(--text);
         }
 
+        /* ── Nav rows (settings subpage links) ── */
+        .nav-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 11px 0;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: color 0.15s;
+        }
+
+        .nav-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .nav-row:first-child {
+            padding-top: 0;
+        }
+
+        .nav-row-label {
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .nav-row-arrow {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            line-height: 1;
+        }
+
+        .nav-row:hover .nav-row-label {
+            color: var(--primary);
+        }
+
+        .nav-row:hover .nav-row-arrow {
+            color: var(--primary);
+        }
+
         select {
             background: var(--surface-alt);
             color: var(--text);
@@ -398,7 +437,7 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════════════
-         View: Settings
+         View: Settings (main)
     ═══════════════════════════════════════════════════════════════════════ -->
     <div id="view-settings" class="view hidden">
         <div class="view-header">
@@ -410,6 +449,63 @@
 
             <div class="section">
                 <div class="section-title">Visuals</div>
+                <div class="nav-row" id="nav-icon">
+                    <span class="nav-row-label">Icon</span>
+                    <span class="nav-row-arrow">›</span>
+                </div>
+                <div class="nav-row" id="nav-tooltip">
+                    <span class="nav-row-label">Tooltip</span>
+                    <span class="nav-row-arrow">›</span>
+                </div>
+                <div class="nav-row" id="nav-dashboard-page">
+                    <span class="nav-row-label">Dashboard</span>
+                    <span class="nav-row-arrow">›</span>
+                </div>
+                <div class="nav-row" id="nav-colors">
+                    <span class="nav-row-label">Colors</span>
+                    <span class="nav-row-arrow">›</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">General</div>
+                <div class="option" style="margin-bottom: 12px;">
+                    <span class="option-label">Launch at Login</span>
+                    <label class="switch">
+                        <input type="checkbox" id="launchAtLogin">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="nav-row" id="nav-update">
+                    <span class="nav-row-label">Update</span>
+                    <span class="nav-row-arrow">›</span>
+                </div>
+            </div>
+
+            <div class="section" style="border-color: rgba(224,82,82,0.3);">
+                <div class="section-title" style="color: var(--danger);">Account</div>
+                <button class="btn-danger" id="logoutBtn">Log Out</button>
+            </div>
+
+        </div>
+
+        <div class="footer" id="settings-footer">
+            <button class="btn-secondary" id="cancelBtn">Cancel</button>
+            <button class="btn-primary" id="saveBtn">Save Settings</button>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Subpage: Icon
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-settings-icon" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn back-to-settings" title="Back">←</button>
+            <h2>Icon</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body" style="padding-bottom: 16px;">
+            <div class="section">
                 <div class="option">
                     <span class="option-label">Display Mode</span>
                     <select id="displayMode">
@@ -423,13 +519,6 @@
                     <select id="iconStyle">
                         <option value="rings">Rings</option>
                         <option value="bars">Bars</option>
-                    </select>
-                </div>
-                <div class="option" id="timeStyleSection">
-                    <span class="option-label">Time Display</span>
-                    <select id="timeStyle">
-                        <option value="absolute">Absolute Time</option>
-                        <option value="countdown">Time Until</option>
                     </select>
                 </div>
                 <div class="option" id="overlayDisplaySection">
@@ -457,20 +546,42 @@
                     </select>
                 </div>
             </div>
+        </div>
+    </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Subpage: Tooltip
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-settings-tooltip" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn back-to-settings" title="Back">←</button>
+            <h2>Tooltip</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body" style="padding-bottom: 16px;">
             <div class="section">
-                <div class="section-title">General</div>
                 <div class="option">
-                    <span class="option-label">Launch at Login</span>
-                    <label class="switch">
-                        <input type="checkbox" id="launchAtLogin">
-                        <span class="slider"></span>
-                    </label>
+                    <span class="option-label">Time Display</span>
+                    <select id="timeStyle">
+                        <option value="absolute">Absolute Time</option>
+                        <option value="countdown">Time Until</option>
+                    </select>
                 </div>
             </div>
+        </div>
+    </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Subpage: Dashboard
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-settings-dashboard" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn back-to-settings" title="Back">←</button>
+            <h2>Dashboard</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body" style="padding-bottom: 16px;">
             <div class="section">
-                <div class="section-title">Tokens</div>
                 <div class="option">
                     <span class="option-label">Safe Pace Indicator</span>
                     <label class="switch">
@@ -498,16 +609,38 @@
                         disabled>
                 </div>
             </div>
+        </div>
+    </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Subpage: Colors
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-settings-colors" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn back-to-settings" title="Back">←</button>
+            <h2>Colors</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body" style="padding-bottom: 16px;">
             <div class="section">
-                <div class="section-title">Colors</div>
                 <div id="colorContainer"></div>
                 <button class="btn-secondary" id="addColorBtn"
                     style="margin-top: 10px; width: 100%; font-size: 0.8rem;">+ Add Color Threshold</button>
             </div>
+        </div>
+    </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Subpage: Update
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-settings-update" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn back-to-settings" title="Back">←</button>
+            <h2>Update</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body" style="padding-bottom: 16px;">
             <div class="section">
-                <div class="section-title">Updates</div>
                 <div class="option" id="updateStatusOption">
                     <span class="option-label" id="appVersionLabel">Version: ...</span>
                     <div style="display: flex; align-items: center; gap: 10px;">
@@ -523,17 +656,6 @@
                         title="Copy app logs for debugging">Copy Debug Logs</button>
                 </div>
             </div>
-
-            <div class="section" style="border-color: rgba(224,82,82,0.3);">
-                <div class="section-title" style="color: var(--danger);">Account</div>
-                <button class="btn-danger" id="logoutBtn">Log Out</button>
-            </div>
-
-        </div>
-
-        <div class="footer">
-            <button class="btn-secondary" id="cancelBtn">Cancel</button>
-            <button class="btn-primary" id="saveBtn">Save Settings</button>
         </div>
     </div>
 

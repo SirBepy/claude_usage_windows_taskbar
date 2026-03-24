@@ -1,18 +1,32 @@
 "use strict";
 
 // ── View navigation ────────────────────────────────────────────────────────────
-const viewDashboard = document.getElementById("view-dashboard");
-const viewSettings = document.getElementById("view-settings");
+const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-update"];
 
 function showView(name) {
-  viewDashboard.classList.toggle("hidden", name !== "dashboard");
-  viewSettings.classList.toggle("hidden", name !== "settings");
+  for (const id of VIEWS) {
+    document.getElementById(`view-${id}`).classList.toggle("hidden", id !== name);
+  }
+  const footer = document.getElementById("settings-footer");
+  if (footer) footer.style.display = name === "settings" ? "flex" : "none";
 }
 
 document.getElementById("settingsBtn").onclick = () => showView("settings");
 document.getElementById("backBtn").onclick = () => showView("dashboard");
 document.getElementById("cancelBtn").onclick = () => showView("dashboard");
 document.getElementById("logoutBtn").onclick = () => window.electronAPI?.logout();
+
+// Settings subpage nav
+document.getElementById("nav-icon").onclick = () => showView("settings-icon");
+document.getElementById("nav-tooltip").onclick = () => showView("settings-tooltip");
+document.getElementById("nav-dashboard-page").onclick = () => showView("settings-dashboard");
+document.getElementById("nav-colors").onclick = () => showView("settings-colors");
+document.getElementById("nav-update").onclick = () => showView("settings-update");
+
+// Back buttons on all subpages
+document.querySelectorAll(".back-to-settings").forEach((btn) => {
+  btn.onclick = () => showView("settings");
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hourToMs(h) {
@@ -298,7 +312,6 @@ const displayMode = document.getElementById("displayMode");
 const iconStyle = document.getElementById("iconStyle");
 const timeStyle = document.getElementById("timeStyle");
 const iconStyleSection = document.getElementById("iconStyleSection");
-const timeStyleSection = document.getElementById("timeStyleSection");
 const overlayDisplay = document.getElementById("overlayDisplay");
 const overlayDisplaySection = document.getElementById("overlayDisplaySection");
 const overlayStyle = document.getElementById("overlayStyle");
@@ -339,22 +352,10 @@ function createColorRow(min = 0, color = "#ffffff") {
 
 function updateVisibilities() {
   const mode = displayMode.value;
-  if (mode === "number") {
-    iconStyleSection.style.display = "none";
-    timeStyleSection.style.display = "none";
-  } else {
-    iconStyleSection.style.display = "flex";
-    timeStyleSection.style.display = "flex";
-  }
-  if (mode === "icon") {
-    overlayDisplaySection.style.display = "none";
-    overlayStyleSection.style.display = "none";
-    colorOverlayModeSection.style.display = "none";
-  } else {
-    overlayDisplaySection.style.display = "flex";
-    overlayStyleSection.style.display = "flex";
-    colorOverlayModeSection.style.display = "flex";
-  }
+  iconStyleSection.style.display = mode === "number" ? "none" : "flex";
+  overlayDisplaySection.style.display = mode === "icon" ? "none" : "flex";
+  overlayStyleSection.style.display = mode === "icon" ? "none" : "flex";
+  colorOverlayModeSection.style.display = mode === "icon" ? "none" : "flex";
 }
 
 displayMode.addEventListener("change", updateVisibilities);
