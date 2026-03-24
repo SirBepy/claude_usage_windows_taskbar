@@ -242,11 +242,17 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 12px;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--border);
         }
 
-        .option:last-child {
-            margin-bottom: 0;
+        .option:first-of-type {
+            padding-top: 0;
+        }
+
+        .option:last-of-type {
+            border-bottom: none;
+            padding-bottom: 0;
         }
 
         .option-label {
@@ -460,7 +466,7 @@
                         <span class="slider"></span>
                     </label>
                 </div>
-                <div class="option" id="updateStatusOption" style="margin-bottom: 0;">
+                <div class="option" id="updateStatusOption">
                     <span class="option-label" id="appVersionLabel">Version: ...</span>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button class="btn-secondary" id="refreshUpdateBtn"

@@ -373,7 +373,6 @@ function saveSettings() {
 function createColorRow(min = 0, color = "#ffffff") {
   const row = document.createElement("div");
   row.className = "option color-row";
-  row.style.marginBottom = "8px";
   row.innerHTML = `
     <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
       <input type="number" class="color-min" value="${min}" min="0" max="100"
