@@ -20,8 +20,7 @@ function formatResetAt(iso, style = "absolute") {
   const hoursUntil = diff / 3600000;
   if (hoursUntil > 20) {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const dayStr = days[resetDate.getDay()];
-    return `${dayStr} ${timeStr}`;
+    return `${days[resetDate.getDay()]} ${timeStr}`;
   }
 
   return timeStr;
@@ -42,56 +41,89 @@ function formatTokens(num) {
   return num.toString();
 }
 
+function calcSafePct(resetAt, windowMs) {
+  if (!resetAt) return null;
+  const diff = new Date(resetAt) - Date.now();
+  if (diff < 0) return 100;
+  return Math.max(0, Math.min(100, Math.round((windowMs - diff) / windowMs * 100)));
+}
+
 /** Builds the tray tooltip string from usage API data. */
 function buildTooltip(data, settings = {}) {
   if (!data) return "Claude Usage — Loading...";
 
-  const style = settings.timeStyle || "absolute";
+  const timeStyle = settings.timeStyle || "absolute";
+  const layout = settings.tooltipLayout || "rows";
+  const showSafePace = settings.tooltipShowSafePace !== false;
+  // support old key name for backward compat
+  const estimateTokens = settings.tooltipEstimateTokens ?? settings.estimateTokens ?? false;
 
   const session = data.five_hour;
-  const w = data.seven_day;
+  const weekly = data.seven_day;
 
-  const sNode = session?.utilization != null;
-  const wNode = w?.utilization != null;
+  const hasSession = session?.utilization != null;
+  const hasWeekly = weekly?.utilization != null;
 
-  if (!sNode && !wNode) return "Claude Usage";
+  if (!hasSession && !hasWeekly) return "Claude Usage";
 
+  const sessionSafe = hasSession ? calcSafePct(session.resets_at, 5 * 3600000) : null;
+  const weeklySafe = hasWeekly ? calcSafePct(weekly.resets_at, 7 * 24 * 3600000) : null;
+
+  const sTime = hasSession && session.resets_at ? formatResetAt(session.resets_at, timeStyle) : null;
+  const wTime = hasWeekly && weekly.resets_at ? formatResetAt(weekly.resets_at, timeStyle) : null;
+
+  function tokensLeft(utilization, plan) {
+    if (!plan) return null;
+    return `${formatTokens(Math.round((Math.max(0, 100 - utilization) / 100) * plan))} left`;
+  }
+  const sessionTokens = estimateTokens && hasSession ? tokensLeft(session.utilization, settings.sessionPlan) : null;
+  const weeklyTokens = estimateTokens && hasWeekly ? tokensLeft(weekly.utilization, settings.weeklyPlan) : null;
+
+  if (layout === "columns") {
+    const lines = [];
+
+    if (hasSession && hasWeekly) lines.push("Session\tWeekly");
+
+    lines.push(
+      [hasSession ? `${session.utilization}%` : null, hasWeekly ? `${weekly.utilization}%` : null]
+        .filter(Boolean).join("\t")
+    );
+
+    if (showSafePace && (sessionSafe !== null || weeklySafe !== null)) {
+      lines.push(
+        [sessionSafe !== null ? `pace ${sessionSafe}%` : "", weeklySafe !== null ? `pace ${weeklySafe}%` : ""]
+          .join("\t").trimEnd()
+      );
+    }
+
+    if (sTime || wTime) {
+      lines.push([sTime || "", wTime || ""].join("\t").trimEnd());
+    }
+
+    if (sessionTokens || weeklyTokens) {
+      lines.push([sessionTokens || "", weeklyTokens || ""].join("\t").trimEnd());
+    }
+
+    return lines.join("\n");
+  }
+
+  // rows layout
   const lines = [];
 
-  function row(s, wStr) {
-    if (sNode && wNode) return `${s}\t${wStr}`;
-    if (sNode) return s;
-    return wStr;
+  if (hasSession) {
+    const parts = [`Session  ${session.utilization}%`];
+    if (showSafePace && sessionSafe !== null) parts.push(`pace ${sessionSafe}%`);
+    if (sTime) parts.push(sTime);
+    if (sessionTokens) parts.push(sessionTokens);
+    lines.push(parts.join("  "));
   }
 
-  lines.push(row("Session:", "Weekly:"));
-  lines.push(row(`${session?.utilization ?? ""}%`, `${w?.utilization ?? ""}%`));
-
-  const sTime =
-    sNode && session.resets_at ? formatResetAt(session.resets_at, style) : "";
-  const wTime = wNode && w.resets_at ? formatResetAt(w.resets_at, style) : "";
-  if (sTime || wTime) {
-    lines.push(row(sTime, wTime));
-  }
-
-  if (settings.estimateTokens) {
-    let sEst = "";
-    if (sNode && settings.sessionPlan) {
-      const left = Math.round(
-        (Math.max(0, 100 - session.utilization) / 100) * settings.sessionPlan,
-      );
-      sEst = `${formatTokens(left)} left`;
-    }
-    let wEst = "";
-    if (wNode && settings.weeklyPlan) {
-      const left = Math.round(
-        (Math.max(0, 100 - w.utilization) / 100) * settings.weeklyPlan,
-      );
-      wEst = `${formatTokens(left)} left`;
-    }
-    if (sEst || wEst) {
-      lines.push(row(sEst, wEst));
-    }
+  if (hasWeekly) {
+    const parts = [`Weekly   ${weekly.utilization}%`];
+    if (showSafePace && weeklySafe !== null) parts.push(`pace ${weeklySafe}%`);
+    if (wTime) parts.push(wTime);
+    if (weeklyTokens) parts.push(weeklyTokens);
+    lines.push(parts.join("  "));
   }
 
   return lines.join("\n");
