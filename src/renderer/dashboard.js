@@ -1,19 +1,16 @@
 "use strict";
 
 // ── View navigation ────────────────────────────────────────────────────────────
-const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-update"];
+const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors"];
 
 function showView(name) {
   for (const id of VIEWS) {
     document.getElementById(`view-${id}`).classList.toggle("hidden", id !== name);
   }
-  const footer = document.getElementById("settings-footer");
-  if (footer) footer.style.display = name === "settings" ? "flex" : "none";
 }
 
 document.getElementById("settingsBtn").onclick = () => showView("settings");
 document.getElementById("backBtn").onclick = () => showView("dashboard");
-document.getElementById("cancelBtn").onclick = () => showView("dashboard");
 document.getElementById("logoutBtn").onclick = () => window.electronAPI?.logout();
 
 // Settings subpage nav
@@ -21,7 +18,6 @@ document.getElementById("nav-icon").onclick = () => showView("settings-icon");
 document.getElementById("nav-tooltip").onclick = () => showView("settings-tooltip");
 document.getElementById("nav-dashboard-page").onclick = () => showView("settings-dashboard");
 document.getElementById("nav-colors").onclick = () => showView("settings-colors");
-document.getElementById("nav-update").onclick = () => showView("settings-update");
 
 // Back buttons on all subpages
 document.querySelectorAll(".back-to-settings").forEach((btn) => {
@@ -232,6 +228,10 @@ function renderHistory(history) {
     : null;
   const weeklySafePct = Math.max(0, Math.min(100, Math.round((7 * 24 * 3_600_000 - (weeklyEndMs - Date.now())) / (7 * 24 * 3_600_000) * 100)));
 
+  const showSafePace = currentSettings.dashboardShowSafePace !== false;
+  const showSessionGraph = currentSettings.dashboardShowSession !== false;
+  const showWeeklyGraph = currentSettings.dashboardShowWeekly !== false;
+
   const legendItem = (id, color, isDashed, label) => {
     const dot = isDashed
       ? `<span style="display:inline-block;width:14px;height:2px;background:${color};vertical-align:middle;margin-right:4px;border-radius:1px;border-top:2px dashed ${color};"></span>`
@@ -243,7 +243,7 @@ function renderHistory(history) {
     <div class="stat-cards">
       <div class="stat-card">
         <div class="stat-label">Session (5h)</div>
-        ${currentSettings.showSafePace !== false ? `
+        ${showSafePace ? `
         <div class="stat-values-row">
           <div class="stat-col">
             <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
@@ -259,7 +259,7 @@ function renderHistory(history) {
       </div>
       <div class="stat-card">
         <div class="stat-label">Weekly (7d)</div>
-        ${currentSettings.showSafePace !== false ? `
+        ${showSafePace ? `
         <div class="stat-values-row">
           <div class="stat-col">
             <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
@@ -274,6 +274,7 @@ function renderHistory(history) {
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>
+    ${showSessionGraph ? `
     <div class="chart-container" style="margin-bottom: 12px;">
       <div class="chart-pagination">
         <button id="prev-session" class="btn-secondary" ${hasSessionPrev ? "" : "disabled"}>◀</button>
@@ -284,7 +285,8 @@ function renderHistory(history) {
         ${legendItem("legend-session", "#9d7dfc", false, "Session")}
       </div>
       ${buildChart(history, shiftedSessionStartMs, shiftedSessionEndMs, "s", "chart-session")}
-    </div>
+    </div>` : ""}
+    ${showWeeklyGraph ? `
     <div class="chart-container">
       <div class="chart-pagination">
         <button id="prev-weekly" class="btn-secondary" ${hasWeeklyPrev ? "" : "disabled"}>◀</button>
@@ -296,7 +298,7 @@ function renderHistory(history) {
         ${legendItem("legend-expected", "#6b6990", true,  "Expected")}
       </div>
       ${buildChart(history, shiftedWeeklyStartMs, shiftedWeeklyEndMs, "w", "chart-weekly")}
-    </div>
+    </div>` : ""}
   `;
 
   setupLegendToggles();
@@ -319,22 +321,58 @@ const overlayStyleSection = document.getElementById("overlayStyleSection");
 const colorOverlayMode = document.getElementById("colorOverlayMode");
 const colorOverlayModeSection = document.getElementById("colorOverlayModeSection");
 const launchAtLogin = document.getElementById("launchAtLogin");
-const showSafePace = document.getElementById("showSafePace");
-const estimateTokens = document.getElementById("estimateTokens");
+const tooltipLayout = document.getElementById("tooltipLayout");
+const tooltipShowSafePace = document.getElementById("tooltipShowSafePace");
+const tooltipEstimateTokens = document.getElementById("tooltipEstimateTokens");
+const tooltipUseColors = document.getElementById("tooltipUseColors");
+const dashboardShowSession = document.getElementById("dashboardShowSession");
+const dashboardShowWeekly = document.getElementById("dashboardShowWeekly");
+const dashboardShowSafePace = document.getElementById("dashboardShowSafePace");
+const dashboardUseColors = document.getElementById("dashboardUseColors");
 const sessionPlan = document.getElementById("sessionPlan");
 const weeklyPlan = document.getElementById("weeklyPlan");
 const colorContainer = document.getElementById("colorContainer");
 const addColorBtn = document.getElementById("addColorBtn");
-const saveBtn = document.getElementById("saveBtn");
 const refreshUpdateBtn = document.getElementById("refreshUpdateBtn");
 const copyLogsBtn = document.getElementById("copyLogsBtn");
 const appVersionLabel = document.getElementById("appVersionLabel");
 const updateBtn = document.getElementById("updateBtn");
 const updateStateLabel = document.getElementById("updateStateLabel");
 
+function saveSettings() {
+  const settings = {
+    displayMode: displayMode.value,
+    iconStyle: iconStyle.value,
+    overlayDisplay: overlayDisplay.value,
+    overlayStyle: overlayStyle.value,
+    colorOverlayMode: colorOverlayMode.value,
+    timeStyle: timeStyle.value,
+    tooltipLayout: tooltipLayout.value,
+    tooltipShowSafePace: tooltipShowSafePace.checked,
+    tooltipEstimateTokens: tooltipEstimateTokens.checked,
+    tooltipUseColors: tooltipUseColors.checked,
+    launchAtLogin: launchAtLogin.checked,
+    dashboardShowSession: dashboardShowSession.checked,
+    dashboardShowWeekly: dashboardShowWeekly.checked,
+    dashboardShowSafePace: dashboardShowSafePace.checked,
+    dashboardUseColors: dashboardUseColors.checked,
+    sessionPlan: parseInt(sessionPlan.value, 10) || 44000,
+    weeklyPlan: parseInt(weeklyPlan.value, 10) || 200000,
+    colorThresholds: Array.from(colorContainer.querySelectorAll(".color-row"))
+      .map((row) => ({
+        min: parseInt(row.querySelector(".color-min").value, 10),
+        color: row.querySelector(".color-val").value,
+      }))
+      .sort((a, b) => a.min - b.min),
+  };
+  currentSettings = settings;
+  window.electronAPI?.saveSettings(settings);
+  renderHistory(lastHistory);
+}
+
 function createColorRow(min = 0, color = "#ffffff") {
   const row = document.createElement("div");
-  row.className = "option";
+  row.className = "option color-row";
   row.style.marginBottom = "8px";
   row.innerHTML = `
     <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
@@ -346,7 +384,9 @@ function createColorRow(min = 0, color = "#ffffff") {
     </div>
     <button class="btn-secondary remove-color-btn" style="padding: 2px 8px; font-size: 0.7rem;">Remove</button>
   `;
-  row.querySelector(".remove-color-btn").onclick = () => row.remove();
+  row.querySelector(".remove-color-btn").onclick = () => { row.remove(); saveSettings(); };
+  row.querySelector(".color-min").addEventListener("change", saveSettings);
+  row.querySelector(".color-val").addEventListener("change", saveSettings);
   return row;
 }
 
@@ -358,37 +398,37 @@ function updateVisibilities() {
   colorOverlayModeSection.style.display = mode === "icon" ? "none" : "flex";
 }
 
-displayMode.addEventListener("change", updateVisibilities);
+displayMode.addEventListener("change", () => { updateVisibilities(); saveSettings(); });
 
 function renderUpdateState(updateState) {
   if (updateState.state === "downloaded") {
-    updateStateLabel.innerText = "Update ready to install";
+    updateStateLabel.innerText = "Ready to install";
     updateStateLabel.style.color = "var(--primary)";
     updateBtn.style.display = "block";
     updateBtn.disabled = false;
     updateBtn.innerText = `Install v${updateState.version}`;
     updateBtn.onclick = () => window.electronAPI?.installUpdate();
   } else if (updateState.state === "available") {
-    updateStateLabel.innerText = `New version available: v${updateState.version}`;
+    updateStateLabel.innerText = `v${updateState.version} available`;
     updateStateLabel.style.color = "var(--text)";
     updateBtn.style.display = "block";
     updateBtn.disabled = false;
-    updateBtn.innerText = "Download & Update";
+    updateBtn.innerText = "Download";
     updateBtn.onclick = () => {
       updateBtn.disabled = true;
       updateBtn.innerText = "Downloading...";
       window.electronAPI?.downloadUpdate();
     };
   } else if (updateState.state === "downloading") {
-    updateStateLabel.innerText = "Downloading update...";
+    updateStateLabel.innerText = "Downloading...";
     updateStateLabel.style.color = "var(--text-dim)";
     updateBtn.style.display = "none";
   } else if (updateState.state === "error") {
-    updateStateLabel.innerText = `Update error: ${updateState.version}`;
+    updateStateLabel.innerText = `Error`;
     updateStateLabel.style.color = "#ff4444";
     updateBtn.style.display = "block";
     updateBtn.disabled = false;
-    updateBtn.innerText = "Retry Check";
+    updateBtn.innerText = "Retry";
     updateBtn.onclick = () => window.electronAPI?.checkForUpdates();
   } else {
     updateStateLabel.innerText = "Up to date";
@@ -402,16 +442,22 @@ window.onload = async () => {
   if (settings) {
     displayMode.value = settings.displayMode || "both";
     iconStyle.value = settings.iconStyle || "rings";
-    timeStyle.value = settings.timeStyle || "absolute";
     overlayDisplay.value = settings.overlayDisplay || "none";
     overlayStyle.value = settings.overlayStyle || "classic";
     colorOverlayMode.value = settings.colorOverlayMode || "number";
+    timeStyle.value = settings.timeStyle || "absolute";
+    tooltipLayout.value = settings.tooltipLayout || "rows";
+    tooltipShowSafePace.checked = settings.tooltipShowSafePace !== false;
+    tooltipEstimateTokens.checked = settings.tooltipEstimateTokens ?? settings.estimateTokens ?? false;
+    tooltipUseColors.checked = settings.tooltipUseColors !== false;
     launchAtLogin.checked = settings.launchAtLogin || false;
-    showSafePace.checked = settings.showSafePace !== false;
-    estimateTokens.checked = settings.estimateTokens || false;
-    currentSettings = settings;
+    dashboardShowSession.checked = settings.dashboardShowSession !== false;
+    dashboardShowWeekly.checked = settings.dashboardShowWeekly !== false;
+    dashboardShowSafePace.checked = settings.dashboardShowSafePace ?? settings.showSafePace ?? true;
+    dashboardUseColors.checked = settings.dashboardUseColors !== false;
     sessionPlan.value = settings.sessionPlan || 44000;
     weeklyPlan.value = settings.weeklyPlan || 200000;
+    currentSettings = settings;
     (settings.colorThresholds || []).forEach((t) =>
       colorContainer.appendChild(createColorRow(t.min, t.color))
     );
@@ -419,15 +465,18 @@ window.onload = async () => {
 
   updateVisibilities();
 
-  const toggleInputs = () => {
-    sessionPlan.disabled = !estimateTokens.checked;
-    weeklyPlan.disabled = !estimateTokens.checked;
-  };
-  estimateTokens.addEventListener("change", toggleInputs);
-  toggleInputs();
+  // Auto-save on any input change
+  for (const el of [iconStyle, overlayDisplay, overlayStyle, colorOverlayMode, timeStyle, tooltipLayout, sessionPlan, weeklyPlan]) {
+    el.addEventListener("change", saveSettings);
+  }
+  for (const el of [launchAtLogin, tooltipShowSafePace, tooltipEstimateTokens, tooltipUseColors, dashboardShowSession, dashboardShowWeekly, dashboardShowSafePace, dashboardUseColors]) {
+    el.addEventListener("change", saveSettings);
+  }
 
-  addColorBtn.onclick = () =>
+  addColorBtn.onclick = () => {
     colorContainer.appendChild(createColorRow(0, "#9d7dfc"));
+    saveSettings();
+  };
 
   const version = await window.electronAPI?.getAppVersion();
   if (version) appVersionLabel.innerText = `Version: ${version}`;
@@ -438,35 +487,9 @@ window.onload = async () => {
   window.electronAPI?.onUpdateStateChange(renderUpdateState);
 };
 
-saveBtn.onclick = () => {
-  const settings = {
-    iconStyle: iconStyle.value,
-    timeStyle: timeStyle.value,
-    displayMode: displayMode.value,
-    overlayDisplay: overlayDisplay.value,
-    overlayStyle: overlayStyle.value,
-    colorOverlayMode: colorOverlayMode.value,
-    launchAtLogin: launchAtLogin.checked,
-    showSafePace: showSafePace.checked,
-    estimateTokens: estimateTokens.checked,
-    sessionPlan: parseInt(sessionPlan.value, 10),
-    weeklyPlan: parseInt(weeklyPlan.value, 10),
-    colorThresholds: Array.from(colorContainer.querySelectorAll(".option"))
-      .map((row) => ({
-        min: parseInt(row.querySelector(".color-min").value, 10),
-        color: row.querySelector(".color-val").value,
-      }))
-      .sort((a, b) => a.min - b.min),
-  };
-  currentSettings = settings;
-  window.electronAPI?.saveSettings(settings);
-  renderHistory(lastHistory);
-  showView("dashboard");
-};
-
 refreshUpdateBtn.addEventListener("click", () => {
   window.electronAPI?.checkForUpdates();
-  updateStateLabel.innerText = "Checking for updates...";
+  updateStateLabel.innerText = "Checking...";
   updateStateLabel.style.color = "var(--text-dim)";
   updateBtn.style.display = "none";
 });
