@@ -39,6 +39,21 @@ function pctColor(v) {
   return "#27ae60";
 }
 
+function getThresholdColor(value, thresholds) {
+  if (value == null || !thresholds || thresholds.length === 0) return null;
+  const sorted = [...thresholds].sort((a, b) => b.min - a.min);
+  for (const t of sorted) {
+    if (value >= t.min) return t.color;
+  }
+  return null;
+}
+
+function valueColor(pct) {
+  if (currentSettings.dashboardUseColors === false) return "var(--text)";
+  const c = getThresholdColor(pct, currentSettings.colorThresholds);
+  return c || pctColor(pct);
+}
+
 function fmtPct(v) {
   return v !== null && v !== undefined ? v + "%" : "--";
 }
@@ -246,7 +261,7 @@ function renderHistory(history) {
         ${showSafePace ? `
         <div class="stat-values-row">
           <div class="stat-col">
-            <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
+            <div class="stat-value" style="color:${valueColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
             <div class="stat-sublabel">current</div>
           </div>
           <div class="stat-col">
@@ -254,7 +269,7 @@ function renderHistory(history) {
             <div class="stat-sublabel">safe pace</div>
           </div>
         </div>` : `
-        <div class="stat-value" style="color:${pctColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>`}
+        <div class="stat-value" style="color:${valueColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>`}
         ${sessionReset ? `<div class="stat-sublabel">${sessionReset}</div>` : ""}
       </div>
       <div class="stat-card">
@@ -262,7 +277,7 @@ function renderHistory(history) {
         ${showSafePace ? `
         <div class="stat-values-row">
           <div class="stat-col">
-            <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
+            <div class="stat-value" style="color:${valueColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
             <div class="stat-sublabel">current</div>
           </div>
           <div class="stat-col">
@@ -270,7 +285,7 @@ function renderHistory(history) {
             <div class="stat-sublabel">safe pace</div>
           </div>
         </div>` : `
-        <div class="stat-value" style="color:${pctColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>`}
+        <div class="stat-value" style="color:${valueColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>`}
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>

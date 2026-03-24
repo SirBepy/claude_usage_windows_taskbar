@@ -41,6 +41,28 @@ function formatTokens(num) {
   return num.toString();
 }
 
+function getThresholdColor(value, thresholds) {
+  if (value == null || !thresholds || thresholds.length === 0) return null;
+  const sorted = [...thresholds].sort((a, b) => b.min - a.min);
+  for (const t of sorted) {
+    if (value >= t.min) return t.color;
+  }
+  return null;
+}
+
+function hexToEmoji(hex) {
+  if (!hex || hex.length < 7) return "";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const max = Math.max(r, g, b);
+  if (max === r && g < 120) return "🔴";
+  if (max === r && g >= 120) return "🟠";
+  if (max === g) return "🟢";
+  if (max === b) return "🔵";
+  return "⚪";
+}
+
 function calcSafePct(resetAt, windowMs) {
   if (!resetAt) return null;
   const diff = new Date(resetAt) - Date.now();
@@ -55,6 +77,7 @@ function buildTooltip(data, settings = {}) {
   const timeStyle = settings.timeStyle || "absolute";
   const layout = settings.tooltipLayout || "rows";
   const showSafePace = settings.tooltipShowSafePace !== false;
+  const useColors = settings.tooltipUseColors !== false;
   // support old key name for backward compat
   const estimateTokens = settings.tooltipEstimateTokens ?? settings.estimateTokens ?? false;
 
@@ -79,19 +102,26 @@ function buildTooltip(data, settings = {}) {
   const sessionTokens = estimateTokens && hasSession ? tokensLeft(session.utilization, settings.sessionPlan) : null;
   const weeklyTokens = estimateTokens && hasWeekly ? tokensLeft(weekly.utilization, settings.weeklyPlan) : null;
 
+  function pctStr(utilization) {
+    const pct = `${utilization}%`;
+    if (!useColors) return pct;
+    const hex = getThresholdColor(utilization, settings.colorThresholds);
+    return hex ? `${hexToEmoji(hex)} ${pct}` : pct;
+  }
+
   if (layout === "columns") {
     const lines = [];
 
     if (hasSession && hasWeekly) lines.push("Session\tWeekly");
 
     lines.push(
-      [hasSession ? `${session.utilization}%` : null, hasWeekly ? `${weekly.utilization}%` : null]
+      [hasSession ? pctStr(session.utilization) : null, hasWeekly ? pctStr(weekly.utilization) : null]
         .filter(Boolean).join("\t")
     );
 
     if (showSafePace && (sessionSafe !== null || weeklySafe !== null)) {
       lines.push(
-        [sessionSafe !== null ? `pace ${sessionSafe}%` : "", weeklySafe !== null ? `pace ${weeklySafe}%` : ""]
+        [sessionSafe !== null ? `${sessionSafe}%` : "", weeklySafe !== null ? `${weeklySafe}%` : ""]
           .join("\t").trimEnd()
       );
     }
@@ -111,16 +141,16 @@ function buildTooltip(data, settings = {}) {
   const lines = [];
 
   if (hasSession) {
-    const parts = [`Session  ${session.utilization}%`];
-    if (showSafePace && sessionSafe !== null) parts.push(`pace ${sessionSafe}%`);
+    const parts = [`Session  ${pctStr(session.utilization)}`];
+    if (showSafePace && sessionSafe !== null) parts.push(`${sessionSafe}%`);
     if (sTime) parts.push(sTime);
     if (sessionTokens) parts.push(sessionTokens);
     lines.push(parts.join("  "));
   }
 
   if (hasWeekly) {
-    const parts = [`Weekly   ${weekly.utilization}%`];
-    if (showSafePace && weeklySafe !== null) parts.push(`pace ${weeklySafe}%`);
+    const parts = [`Weekly   ${pctStr(weekly.utilization)}`];
+    if (showSafePace && weeklySafe !== null) parts.push(`${weeklySafe}%`);
     if (wTime) parts.push(wTime);
     if (weeklyTokens) parts.push(weeklyTokens);
     lines.push(parts.join("  "));
