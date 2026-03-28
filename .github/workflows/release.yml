@@ -24,18 +24,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Bump version and push
+      - name: Get version
         id: version
         shell: bash
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          npm version patch -m "chore: bump version to %s [skip ci]"
-          git push
-          git push --tags
-          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
       - name: Build (unsigned)
         run: npm run dist
