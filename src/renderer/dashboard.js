@@ -1,7 +1,7 @@
 "use strict";
 
 // ── View navigation ────────────────────────────────────────────────────────────
-const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors"];
+const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-sounds"];
 
 function showView(name) {
   for (const id of VIEWS) {
@@ -18,6 +18,7 @@ document.getElementById("nav-icon").onclick = () => showView("settings-icon");
 document.getElementById("nav-tooltip").onclick = () => showView("settings-tooltip");
 document.getElementById("nav-dashboard-page").onclick = () => showView("settings-dashboard");
 document.getElementById("nav-colors").onclick = () => showView("settings-colors");
+document.getElementById("nav-sounds").onclick = () => showView("settings-sounds");
 
 // Back buttons on all subpages
 document.querySelectorAll(".back-to-settings").forEach((btn) => {
@@ -348,6 +349,12 @@ const sessionPlan = document.getElementById("sessionPlan");
 const weeklyPlan = document.getElementById("weeklyPlan");
 const colorContainer = document.getElementById("colorContainer");
 const addColorBtn = document.getElementById("addColorBtn");
+const soundWorkFinishedEnabled = document.getElementById("soundWorkFinishedEnabled");
+const soundWorkFinishedFile = document.getElementById("soundWorkFinishedFile");
+const soundWorkFinishedPicker = document.getElementById("soundWorkFinishedPicker");
+const soundThresholdEnabled = document.getElementById("soundThresholdEnabled");
+const soundThresholdFile = document.getElementById("soundThresholdFile");
+const soundThresholdPicker = document.getElementById("soundThresholdPicker");
 const refreshUpdateBtn = document.getElementById("refreshUpdateBtn");
 const copyLogsBtn = document.getElementById("copyLogsBtn");
 const appVersionLabel = document.getElementById("appVersionLabel");
@@ -379,6 +386,10 @@ function saveSettings() {
         color: row.querySelector(".color-val").value,
       }))
       .sort((a, b) => a.min - b.min),
+    sounds: {
+      workFinished: { enabled: soundWorkFinishedEnabled.checked, file: soundWorkFinishedFile.value },
+      thresholdCrossed: { enabled: soundThresholdEnabled.checked, file: soundThresholdFile.value },
+    },
   };
   currentSettings = settings;
   window.electronAPI?.saveSettings(settings);
@@ -475,6 +486,16 @@ window.onload = async () => {
     (settings.colorThresholds || []).forEach((t) =>
       colorContainer.appendChild(createColorRow(t.min, t.color))
     );
+
+    const sfx = settings.sounds || {};
+    const wf = sfx.workFinished || {};
+    const tc = sfx.thresholdCrossed || {};
+    soundWorkFinishedEnabled.checked = wf.enabled || false;
+    soundWorkFinishedFile.value = wf.file || "sound1.mp3";
+    soundThresholdEnabled.checked = tc.enabled || false;
+    soundThresholdFile.value = tc.file || "sound6.mp3";
+    soundWorkFinishedPicker.style.display = soundWorkFinishedEnabled.checked ? "flex" : "none";
+    soundThresholdPicker.style.display = soundThresholdEnabled.checked ? "flex" : "none";
   }
 
   updateVisibilities();
@@ -490,6 +511,24 @@ window.onload = async () => {
   addColorBtn.onclick = () => {
     colorContainer.appendChild(createColorRow(0, "#9d7dfc"));
     saveSettings();
+  };
+
+  soundWorkFinishedEnabled.addEventListener("change", () => {
+    soundWorkFinishedPicker.style.display = soundWorkFinishedEnabled.checked ? "flex" : "none";
+    saveSettings();
+  });
+  soundThresholdEnabled.addEventListener("change", () => {
+    soundThresholdPicker.style.display = soundThresholdEnabled.checked ? "flex" : "none";
+    saveSettings();
+  });
+  soundWorkFinishedFile.addEventListener("change", saveSettings);
+  soundThresholdFile.addEventListener("change", saveSettings);
+
+  document.getElementById("previewWorkFinished").onclick = () => {
+    new Audio(`../assets/sounds/${soundWorkFinishedFile.value}`).play().catch(() => {});
+  };
+  document.getElementById("previewThreshold").onclick = () => {
+    new Audio(`../assets/sounds/${soundThresholdFile.value}`).play().catch(() => {});
   };
 
   const version = await window.electronAPI?.getAppVersion();

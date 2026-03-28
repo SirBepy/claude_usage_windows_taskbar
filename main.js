@@ -14,7 +14,7 @@ const HOOK_SERVER_PORT = 27182;
 const hookServer = http.createServer((req, res) => {
   if (req.method === "POST" && req.url === "/refresh") {
     res.writeHead(204).end();
-    refreshWithAnimation().catch(console.error);
+    refreshWithAnimation(true).catch(console.error);
   } else if (req.method === "POST" && req.url === "/quit") {
     res.writeHead(204).end();
     app.quit();
@@ -84,6 +84,46 @@ let usageData = null;
 let loggedIn = false;
 let dashboardWindow = null;
 let settings = loadSettings();
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioWindow = null;
+let audioQueue = [];
+
+function createAudioWindow() {
+  audioWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "src", "renderer", "audio-preload.js"),
+      nodeIntegration: false,
+      contextIsolation: false,
+      sandbox: false,
+    },
+  });
+  audioWindow.loadFile(path.join(__dirname, "src", "renderer", "audio-player.html"));
+  audioWindow.webContents.once("did-finish-load", () => {
+    for (const f of audioQueue) audioWindow.webContents.send("play-sound", f);
+    audioQueue = [];
+  });
+  audioWindow.on("closed", () => { audioWindow = null; });
+}
+
+function playSound(soundFile) {
+  if (!soundFile) return;
+  const soundPath = "file:///" + path.join(__dirname, "src", "assets", "sounds", soundFile).replace(/\\/g, "/");
+  if (!audioWindow || audioWindow.isDestroyed()) {
+    createAudioWindow();
+    audioQueue.push(soundPath);
+  } else if (audioWindow.webContents.isLoading()) {
+    audioQueue.push(soundPath);
+  } else {
+    audioWindow.webContents.send("play-sound", soundPath);
+  }
+}
+
+function hasThresholdCrossed(prevPct, newPct, thresholds) {
+  if (prevPct == null || newPct == null || !thresholds) return false;
+  return thresholds.some((t) => prevPct < t.min && newPct >= t.min);
+}
 
 // ── Temp display cycling (left click) ─────────────────────────────────────────
 let tempDisplay = null;       // { displayMode, overlayDisplay } or null
@@ -179,10 +219,30 @@ function stopPolling() {
   }
 }
 
-async function refresh() {
+async function refresh(fromHook = false) {
+  const prevSession = parseSessionPct(usageData);
+  const prevWeekly = parseWeeklyPct(usageData);
   try {
     usageData = await fetchUsage();
     loggedIn = true;
+
+    const newSession = parseSessionPct(usageData);
+    const newWeekly = parseWeeklyPct(usageData);
+    const sfx = settings.sounds || {};
+
+    if (fromHook && sfx.workFinished?.enabled) {
+      playSound(sfx.workFinished.file);
+    }
+    if (sfx.thresholdCrossed?.enabled) {
+      const thresholds = settings.colorThresholds;
+      if (
+        hasThresholdCrossed(prevSession, newSession, thresholds) ||
+        hasThresholdCrossed(prevWeekly, newWeekly, thresholds)
+      ) {
+        playSound(sfx.thresholdCrossed.file);
+      }
+    }
+
     updateTray();
     recordSnapshot(usageData);
     dashboardWindow?.webContents.send("history-updated", loadHistory());
@@ -204,7 +264,7 @@ function updateTray() {
  * The inner ring stays at the last known weekly value.
  * Stops automatically once the refresh promise settles.
  */
-async function refreshWithAnimation() {
+async function refreshWithAnimation(fromHook = false) {
   if (spinTimer) return; // already refreshing
 
   let frame = 0;
@@ -215,7 +275,7 @@ async function refreshWithAnimation() {
   }, 50);
 
   try {
-    await refresh();
+    await refresh(fromHook);
   } finally {
     clearInterval(spinTimer);
     spinTimer = null;
@@ -422,6 +482,7 @@ app.whenReady().then(async () => {
   pruneHistory();
 
   createTray();
+  createAudioWindow();
   setupAutoUpdater(() => {
     const state = getUpdateState();
     console.log("Updater state changed via callback:", state);
@@ -460,4 +521,5 @@ app.on("before-quit", () => {
   stopPolling();
   tray?.destroy();
   hookServer.close();
+  audioWindow?.destroy();
 });

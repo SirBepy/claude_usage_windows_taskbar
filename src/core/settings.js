@@ -23,6 +23,10 @@ const DEFAULT_SETTINGS = {
     { min: 50, color: "#e67e22" },
     { min: 80, color: "#e74c3c" },
   ],
+  sounds: {
+    workFinished: { enabled: false, file: "sound1.mp3" },
+    thresholdCrossed: { enabled: false, file: "sound6.mp3" },
+  },
 };
 
 function loadSettings() {

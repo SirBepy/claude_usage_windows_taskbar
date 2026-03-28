@@ -458,6 +458,14 @@
             </div>
 
             <div class="section">
+                <div class="section-title">Notifications</div>
+                <div class="nav-row" id="nav-sounds">
+                    <span class="nav-row-label">Sounds</span>
+                    <span class="nav-row-arrow">›</span>
+                </div>
+            </div>
+
+            <div class="section">
                 <div class="section-title">General</div>
                 <div class="option">
                     <span class="option-label">Launch at Login</span>
@@ -661,6 +669,67 @@
                 <div id="colorContainer"></div>
                 <button class="btn-secondary" id="addColorBtn"
                     style="margin-top: 10px; width: 100%; font-size: 0.8rem;">+ Add Color Threshold</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Subpage: Sounds
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-settings-sounds" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn back-to-settings" title="Back">←</button>
+            <h2>Sounds</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body">
+            <div class="section">
+                <div class="section-title">Work Finished</div>
+                <div class="option">
+                    <span class="option-label">Enabled</span>
+                    <label class="switch">
+                        <input type="checkbox" id="soundWorkFinishedEnabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="option" id="soundWorkFinishedPicker" style="display:none">
+                    <span class="option-label" style="font-size:0.82rem;color:var(--text-dim)">Sound</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <select id="soundWorkFinishedFile">
+                            <option value="sound1.mp3">Sound 1</option>
+                            <option value="sound2.mp3">Sound 2</option>
+                            <option value="sound3.mp3">Sound 3</option>
+                            <option value="sound4.mp3">Sound 4</option>
+                            <option value="sound5.mp3">Sound 5</option>
+                            <option value="sound6.mp3">Sound 6</option>
+                        </select>
+                        <button class="btn-secondary" id="previewWorkFinished" style="padding:3px 10px;font-size:0.8rem">▶</button>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Threshold Crossed</div>
+                <div class="option">
+                    <span class="option-label">Enabled</span>
+                    <label class="switch">
+                        <input type="checkbox" id="soundThresholdEnabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="option" id="soundThresholdPicker" style="display:none">
+                    <span class="option-label" style="font-size:0.82rem;color:var(--text-dim)">Sound</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <select id="soundThresholdFile">
+                            <option value="sound1.mp3">Sound 1</option>
+                            <option value="sound2.mp3">Sound 2</option>
+                            <option value="sound3.mp3">Sound 3</option>
+                            <option value="sound4.mp3">Sound 4</option>
+                            <option value="sound5.mp3">Sound 5</option>
+                            <option value="sound6.mp3">Sound 6</option>
+                        </select>
+                        <button class="btn-secondary" id="previewThreshold" style="padding:3px 10px;font-size:0.8rem">▶</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
