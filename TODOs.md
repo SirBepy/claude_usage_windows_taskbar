@@ -4,19 +4,6 @@
 
 
 
-## [T-014] "Waiting for input" notification
-**Status:** planned
-**Added:** 2026-03-29
-**Description:** Epic 1b. Wire up a new hook endpoint (POST /notify or similar) triggered by Claude Code's Notification hook event. Parse `cwd` from the payload the same way as T-013, then show a native OS notification: "Claude is waiting for input in <project>". Shares all the stdin-forwarding infrastructure introduced in T-013 - do T-013 first.
-**Questions:**
-- [x] New endpoint or reuse /refresh?: "New endpoint POST /notify - cleaner separation"
-
-**Plan:**
-1. ~~Add `POST /notify` to main.js~~ - done as part of T-013.
-2. In `~/.claude/settings.json`, add a `Notification` hook entry: `curl -s -X POST http://127.0.0.1:27182/notify -H "Content-Type: application/json" -d @-`.
-3. Test: trigger a Claude session that prompts for user input and confirm the notification fires.
-
----
 
 ## [T-015] Token stats parser and history storage
 **Status:** planned
