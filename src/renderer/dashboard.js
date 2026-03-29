@@ -34,7 +34,6 @@ document.getElementById("statsBtn").onclick = () => {
   showView("stats");
 };
 document.getElementById("statsBackBtn").onclick = () => {
-  editingProjectCwd = null;
   showView("dashboard");
 };
 document.getElementById("projectDetailBackBtn").onclick = () => showView("stats");
@@ -112,7 +111,6 @@ let lastTokenHistory = null;
 let currentSettings = {};
 let statsSortCol = "totalTokens";
 let statsSortDir = -1;
-let editingProjectCwd = null;
 let projectDetailState = { cwd: null, range: "30d", offset: 0 };
 
 // ── Chart rendering ───────────────────────────────────────────────────────────
@@ -394,9 +392,12 @@ function cacheEffPct(r) {
 
 function projectLabel(cwd) {
   const alias = currentSettings.projectAliases?.[cwd];
-  const name = alias?.name || (cwd ? cwd.split(/[/\\]/).filter(Boolean).pop() || cwd : "(unknown)");
-  const emoji = alias?.emoji || "";
-  return emoji ? `${emoji} ${name}` : name;
+  const fallback = cwd ? cwd.split(/[/\\]/).filter(Boolean).pop() || cwd : "(unknown)";
+  if (!alias) return fallback;
+  const name = alias.name || fallback;
+  // backward compat: old saves stored emoji separately
+  const emoji = alias.emoji || "";
+  return emoji && !name.startsWith(emoji) ? `${emoji} ${name}` : name;
 }
 
 function aggregateByProject(tokenHistory) {
@@ -498,28 +499,8 @@ function renderStats(tokenHistory) {
     const tot = totalTok(p);
     const avg = p.sessions ? Math.round(tot / p.sessions) : 0;
     const pct = grandTotal ? Math.round(tot / grandTotal * 100) : 0;
-
-    if (editingProjectCwd === p.cwd) {
-      const alias = currentSettings.projectAliases?.[p.cwd] || {};
-      const defaultName = p.cwd.split(/[/\\]/).filter(Boolean).pop() || p.cwd;
-      return `<tr>
-        <td colspan="6">
-          <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-            <input id="edit-emoji" value="${alias.emoji || ""}" placeholder="😀" maxlength="2"
-              style="width:40px;text-align:center;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:4px;border-radius:6px;font-size:1rem">
-            <input id="edit-name" value="${alias.name || defaultName}"
-              style="flex:1;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-family:'DM Sans',system-ui,sans-serif;font-size:0.88rem">
-            <button class="btn-primary" id="save-alias-btn" data-cwd="${p.cwd}" style="padding:4px 10px;font-size:0.8rem">Save</button>
-            <button class="btn-secondary" id="cancel-alias-btn" style="padding:4px 10px;font-size:0.8rem">✕</button>
-          </div>
-        </td>
-      </tr>`;
-    }
-
     return `<tr class="proj-row" data-cwd="${p.cwd}">
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${projectLabel(p.cwd)}
-        <button class="btn-secondary edit-alias-btn" data-cwd="${p.cwd}" style="padding:1px 5px;font-size:0.65rem;margin-left:4px">✏</button>
-      </td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${projectLabel(p.cwd)}</td>
       <td class="mono">${p.sessions}</td>
       <td class="mono">${fmtK(avg)}</td>
       <td class="mono">${fmtK(tot)}</td>
@@ -545,38 +526,8 @@ function renderStats(tokenHistory) {
   });
 
   container.querySelectorAll(".proj-row").forEach((row) => {
-    row.onclick = (e) => {
-      if (e.target.closest(".edit-alias-btn")) return;
-      openProjectDetail(row.dataset.cwd);
-    };
+    row.onclick = () => openProjectDetail(row.dataset.cwd);
   });
-
-  container.querySelectorAll(".edit-alias-btn").forEach((btn) => {
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      editingProjectCwd = btn.dataset.cwd;
-      renderStats(lastTokenHistory);
-    };
-  });
-
-  const saveAliasBtn = container.querySelector("#save-alias-btn");
-  if (saveAliasBtn) {
-    saveAliasBtn.onclick = () => {
-      const cwd = saveAliasBtn.dataset.cwd;
-      const emoji = document.getElementById("edit-emoji").value.trim();
-      const name = document.getElementById("edit-name").value.trim();
-      if (!currentSettings.projectAliases) currentSettings.projectAliases = {};
-      currentSettings.projectAliases[cwd] = { emoji, name };
-      editingProjectCwd = null;
-      saveSettings();
-      renderStats(lastTokenHistory);
-    };
-  }
-
-  const cancelAliasBtn = container.querySelector("#cancel-alias-btn");
-  if (cancelAliasBtn) {
-    cancelAliasBtn.onclick = () => { editingProjectCwd = null; renderStats(lastTokenHistory); };
-  }
 
   setupBackfillBtn();
 }
@@ -613,6 +564,21 @@ function openProjectDetail(cwd) {
   if (title) title.textContent = projectLabel(cwd);
   const pathEl = document.getElementById("projectDetailPath");
   if (pathEl) pathEl.textContent = cwd || "";
+
+  const aliasInput = document.getElementById("project-alias-input");
+  const aliasSave = document.getElementById("project-alias-save");
+  if (aliasInput) aliasInput.value = projectLabel(cwd);
+  if (aliasSave) {
+    aliasSave.onclick = () => {
+      const name = aliasInput.value.trim();
+      if (!currentSettings.projectAliases) currentSettings.projectAliases = {};
+      currentSettings.projectAliases[cwd] = { name };
+      saveSettings();
+      if (title) title.textContent = projectLabel(cwd);
+      renderStats(lastTokenHistory);
+    };
+  }
+
   renderProjectDetail();
   showView("stats-project");
 }
