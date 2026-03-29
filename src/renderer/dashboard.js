@@ -611,6 +611,8 @@ function openProjectDetail(cwd) {
   projectDetailState.offset = 0;
   const title = document.getElementById("projectDetailTitle");
   if (title) title.textContent = projectLabel(cwd);
+  const pathEl = document.getElementById("projectDetailPath");
+  if (pathEl) pathEl.textContent = cwd || "";
   renderProjectDetail();
   showView("stats-project");
 }

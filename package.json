@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-taskbar-tool",
-  "version": "1.0.47",
+  "version": "1.0.48",
   "description": "Claude Usage Taskbar Tool",
   "main": "main.js",
   "author": "SirBepy",
