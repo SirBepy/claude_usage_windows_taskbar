@@ -1,9 +1,12 @@
 "use strict";
 
 // ── View navigation ────────────────────────────────────────────────────────────
-const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-sounds"];
+const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-sounds", "stats", "stats-project"];
+
+let activeView = "dashboard";
 
 function showView(name) {
+  activeView = name;
   for (const id of VIEWS) {
     document.getElementById(`view-${id}`).classList.toggle("hidden", id !== name);
   }
@@ -24,6 +27,34 @@ document.getElementById("nav-sounds").onclick = () => showView("settings-sounds"
 document.querySelectorAll(".back-to-settings").forEach((btn) => {
   btn.onclick = () => showView("settings");
 });
+
+// Stats navigation
+document.getElementById("statsBtn").onclick = () => {
+  renderStats(lastTokenHistory);
+  showView("stats");
+};
+document.getElementById("statsBackBtn").onclick = () => {
+  editingProjectCwd = null;
+  showView("dashboard");
+};
+document.getElementById("projectDetailBackBtn").onclick = () => showView("stats");
+
+// Stats-project range + scroll buttons
+document.querySelectorAll(".range-btn").forEach((btn) => {
+  btn.onclick = () => {
+    projectDetailState.range = btn.dataset.range;
+    projectDetailState.offset = 0;
+    renderProjectDetail();
+  };
+});
+document.getElementById("chartPrevBtn").onclick = () => {
+  projectDetailState.offset++;
+  renderProjectDetail();
+};
+document.getElementById("chartNextBtn").onclick = () => {
+  projectDetailState.offset = Math.max(0, projectDetailState.offset - 1);
+  renderProjectDetail();
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hourToMs(h) {
@@ -77,7 +108,12 @@ const lineVisible = { session: true, weekly: true, expected: true };
 let sessionPageOffset = 0;  // 0 = current session window, 1 = one window back, etc.
 let weeklyPageOffset = 0;   // 0 = current week, 1 = one week back, etc.
 let lastHistory = null;
+let lastTokenHistory = null;
 let currentSettings = {};
+let statsSortCol = "totalTokens";
+let statsSortDir = -1;
+let editingProjectCwd = null;
+let projectDetailState = { cwd: null, range: "30d", offset: 0 };
 
 // ── Chart rendering ───────────────────────────────────────────────────────────
 function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
@@ -290,6 +326,7 @@ function renderHistory(history) {
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>
+    ${buildTodaySectionHTML(lastTokenHistory)}
     ${showSessionGraph ? `
     <div class="chart-container" style="margin-bottom: 12px;">
       <div class="chart-pagination">
@@ -323,7 +360,378 @@ function renderHistory(history) {
 }
 
 window.electronAPI?.getUsageHistory().then(renderHistory);
-window.electronAPI?.onHistoryUpdated(renderHistory);
+window.electronAPI?.onHistoryUpdated((h) => {
+  renderHistory(h);
+  if (activeView === "stats") renderStats(lastTokenHistory);
+});
+
+window.electronAPI?.getTokenHistory().then((th) => { lastTokenHistory = th; });
+window.electronAPI?.onTokenHistoryUpdated((th) => {
+  lastTokenHistory = th;
+  if (lastHistory) renderHistory(lastHistory);
+  if (activeView === "stats") renderStats(th);
+  if (activeView === "stats-project") renderProjectDetail();
+});
+
+// ── Token stats helpers ────────────────────────────────────────────────────────
+function fmtK(n) {
+  if (!n) return "0";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 10_000) return Math.round(n / 1000) + "K";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+  return String(n);
+}
+
+function totalTok(r) {
+  return (r.inputTokens || 0) + (r.outputTokens || 0) + (r.cacheReadTokens || 0) + (r.cacheCreationTokens || 0);
+}
+
+function cacheEffPct(r) {
+  const denom = (r.inputTokens || 0) + (r.cacheReadTokens || 0) + (r.cacheCreationTokens || 0);
+  if (!denom) return 0;
+  return Math.round((r.cacheReadTokens || 0) / denom * 100);
+}
+
+function projectLabel(cwd) {
+  const alias = currentSettings.projectAliases?.[cwd];
+  const name = alias?.name || (cwd ? cwd.split(/[/\\]/).filter(Boolean).pop() || cwd : "(unknown)");
+  const emoji = alias?.emoji || "";
+  return emoji ? `${emoji} ${name}` : name;
+}
+
+function aggregateByProject(tokenHistory) {
+  const map = new Map();
+  for (const r of tokenHistory) {
+    const key = r.cwd || "(unknown)";
+    if (!map.has(key)) map.set(key, { cwd: key, sessions: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, turns: 0, lastDate: "" });
+    const p = map.get(key);
+    p.sessions++;
+    p.inputTokens += r.inputTokens || 0;
+    p.outputTokens += r.outputTokens || 0;
+    p.cacheReadTokens += r.cacheReadTokens || 0;
+    p.cacheCreationTokens += r.cacheCreationTokens || 0;
+    p.turns += r.turns || 0;
+    if ((r.date || "") > p.lastDate) p.lastDate = r.date || "";
+  }
+  return Array.from(map.values());
+}
+
+// ── Today summary ──────────────────────────────────────────────────────────────
+function buildTodaySectionHTML(tokenHistory) {
+  if (!tokenHistory || !tokenHistory.length) return "";
+  const today = new Date().toISOString().slice(0, 10);
+  const todayRecords = tokenHistory.filter((r) => r.date === today);
+  if (!todayRecords.length) return "";
+
+  const byProject = new Map();
+  for (const r of todayRecords) {
+    const key = r.cwd || "(unknown)";
+    if (!byProject.has(key)) byProject.set(key, { cwd: key, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
+    const p = byProject.get(key);
+    p.inputTokens += r.inputTokens || 0;
+    p.outputTokens += r.outputTokens || 0;
+    p.cacheReadTokens += r.cacheReadTokens || 0;
+    p.cacheCreationTokens += r.cacheCreationTokens || 0;
+  }
+
+  const rows = Array.from(byProject.values()).map((p) => {
+    const tot = totalTok(p);
+    const eff = cacheEffPct(p);
+    return `<div class="today-row">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%">${projectLabel(p.cwd)}</span>
+      <span style="font-family:'Fira Code',monospace;font-size:0.78rem;color:var(--text-dim)">${fmtK(tot)} tok${eff > 0 ? ` · ${eff}% cache` : ""}</span>
+    </div>`;
+  }).join("");
+
+  return `<div class="today-section">
+    <div class="stat-label" style="margin-bottom:8px">Today</div>
+    ${rows}
+  </div>`;
+}
+
+// ── Stats view ─────────────────────────────────────────────────────────────────
+function renderStats(tokenHistory) {
+  const container = document.getElementById("stats-table-container");
+  if (!container) return;
+
+  if (!tokenHistory || !tokenHistory.length) {
+    container.innerHTML = `<div class="no-data">No sessions recorded yet.<br><small style="font-size:0.8rem">Use ↺ Rebuild History to import past sessions.</small></div>`;
+    setupBackfillBtn();
+    return;
+  }
+
+  const projects = aggregateByProject(tokenHistory);
+  const grandTotal = projects.reduce((s, p) => s + totalTok(p), 0);
+
+  const colDefs = [
+    { key: "project", label: "Project", sortable: false },
+    { key: "sessions", label: "Sess", sortable: true },
+    { key: "avg", label: "Avg/sess", sortable: true },
+    { key: "totalTokens", label: "Total", sortable: true },
+    { key: "pct", label: "% of all", sortable: true },
+    { key: "lastDate", label: "Last active", sortable: true },
+  ];
+
+  function sortVal(p, col) {
+    if (col === "sessions") return p.sessions;
+    if (col === "avg") return p.sessions ? Math.round(totalTok(p) / p.sessions) : 0;
+    if (col === "totalTokens") return totalTok(p);
+    if (col === "pct") return grandTotal ? totalTok(p) / grandTotal : 0;
+    if (col === "lastDate") return p.lastDate;
+    return 0;
+  }
+
+  const sorted = [...projects].sort((a, b) => {
+    const av = sortVal(a, statsSortCol);
+    const bv = sortVal(b, statsSortCol);
+    return (av < bv ? -1 : av > bv ? 1 : 0) * statsSortDir;
+  });
+
+  const headers = colDefs.map((c) => {
+    if (!c.sortable) return `<th>${c.label}</th>`;
+    const arrow = statsSortCol === c.key ? (statsSortDir === -1 ? " ↓" : " ↑") : "";
+    const cls = statsSortCol === c.key ? " sort-active" : "";
+    return `<th class="${cls}" data-sort="${c.key}">${c.label}${arrow}</th>`;
+  }).join("");
+
+  const rows = sorted.map((p) => {
+    const tot = totalTok(p);
+    const avg = p.sessions ? Math.round(tot / p.sessions) : 0;
+    const pct = grandTotal ? Math.round(tot / grandTotal * 100) : 0;
+
+    if (editingProjectCwd === p.cwd) {
+      const alias = currentSettings.projectAliases?.[p.cwd] || {};
+      const defaultName = p.cwd.split(/[/\\]/).filter(Boolean).pop() || p.cwd;
+      return `<tr>
+        <td colspan="6">
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+            <input id="edit-emoji" value="${alias.emoji || ""}" placeholder="😀" maxlength="2"
+              style="width:40px;text-align:center;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:4px;border-radius:6px;font-size:1rem">
+            <input id="edit-name" value="${alias.name || defaultName}"
+              style="flex:1;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-family:'DM Sans',system-ui,sans-serif;font-size:0.88rem">
+            <button class="btn-primary" id="save-alias-btn" data-cwd="${p.cwd}" style="padding:4px 10px;font-size:0.8rem">Save</button>
+            <button class="btn-secondary" id="cancel-alias-btn" style="padding:4px 10px;font-size:0.8rem">✕</button>
+          </div>
+        </td>
+      </tr>`;
+    }
+
+    return `<tr class="proj-row" data-cwd="${p.cwd}">
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${projectLabel(p.cwd)}
+        <button class="btn-secondary edit-alias-btn" data-cwd="${p.cwd}" style="padding:1px 5px;font-size:0.65rem;margin-left:4px">✏</button>
+      </td>
+      <td class="mono">${p.sessions}</td>
+      <td class="mono">${fmtK(avg)}</td>
+      <td class="mono">${fmtK(tot)}</td>
+      <td class="mono">${pct}%</td>
+      <td class="mono">${p.lastDate || "—"}</td>
+    </tr>`;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="section" style="padding:12px 14px;overflow-x:auto">
+      <table class="stats-table">
+        <thead><tr>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  container.querySelectorAll("th[data-sort]").forEach((th) => {
+    th.onclick = () => {
+      const col = th.dataset.sort;
+      statsSortCol === col ? (statsSortDir *= -1) : (statsSortCol = col, statsSortDir = -1);
+      renderStats(lastTokenHistory);
+    };
+  });
+
+  container.querySelectorAll(".proj-row").forEach((row) => {
+    row.onclick = (e) => {
+      if (e.target.closest(".edit-alias-btn")) return;
+      openProjectDetail(row.dataset.cwd);
+    };
+  });
+
+  container.querySelectorAll(".edit-alias-btn").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      editingProjectCwd = btn.dataset.cwd;
+      renderStats(lastTokenHistory);
+    };
+  });
+
+  const saveAliasBtn = container.querySelector("#save-alias-btn");
+  if (saveAliasBtn) {
+    saveAliasBtn.onclick = () => {
+      const cwd = saveAliasBtn.dataset.cwd;
+      const emoji = document.getElementById("edit-emoji").value.trim();
+      const name = document.getElementById("edit-name").value.trim();
+      if (!currentSettings.projectAliases) currentSettings.projectAliases = {};
+      currentSettings.projectAliases[cwd] = { emoji, name };
+      editingProjectCwd = null;
+      saveSettings();
+      renderStats(lastTokenHistory);
+    };
+  }
+
+  const cancelAliasBtn = container.querySelector("#cancel-alias-btn");
+  if (cancelAliasBtn) {
+    cancelAliasBtn.onclick = () => { editingProjectCwd = null; renderStats(lastTokenHistory); };
+  }
+
+  setupBackfillBtn();
+}
+
+function setupBackfillBtn() {
+  const btn = document.getElementById("backfillBtn");
+  const status = document.getElementById("backfill-status");
+  if (!btn || btn._hooked) return;
+  btn._hooked = true;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = "Scanning...";
+    if (status) { status.style.display = "block"; status.textContent = "This may take a while…"; }
+    try {
+      const result = await window.electronAPI?.backfillTranscripts();
+      const msg = result ? `Done — ${result.processed} new, ${result.skipped} skipped` : "Done";
+      if (status) status.textContent = msg;
+      lastTokenHistory = await window.electronAPI?.getTokenHistory();
+      renderStats(lastTokenHistory);
+    } catch (e) {
+      if (status) status.textContent = "Error: " + e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "↺ Rebuild History";
+    }
+  };
+}
+
+// ── Project detail ─────────────────────────────────────────────────────────────
+function openProjectDetail(cwd) {
+  projectDetailState.cwd = cwd;
+  projectDetailState.offset = 0;
+  const title = document.getElementById("projectDetailTitle");
+  if (title) title.textContent = projectLabel(cwd);
+  renderProjectDetail();
+  showView("stats-project");
+}
+
+function renderProjectDetail() {
+  const { cwd, range, offset } = projectDetailState;
+  const chartContainer = document.getElementById("project-chart-container");
+  if (!chartContainer || !lastTokenHistory) return;
+
+  document.querySelectorAll(".range-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.range === range);
+  });
+
+  let records = lastTokenHistory.filter((r) => r.cwd === cwd);
+  if (range !== "all") {
+    const days = range === "7d" ? 7 : 30;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    records = records.filter((r) => r.date >= cutoffStr);
+  }
+
+  const byDate = new Map();
+  for (const r of records) {
+    const d = r.date || "unknown";
+    byDate.set(d, (byDate.get(d) || 0) + totalTok(r));
+  }
+
+  const sortedDays = Array.from(byDate.entries())
+    .map(([date, tokens]) => ({ date, tokens }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  const prevBtn = document.getElementById("chartPrevBtn");
+  const nextBtn = document.getElementById("chartNextBtn");
+
+  if (!sortedDays.length) {
+    chartContainer.innerHTML = `<div class="no-data">No activity in this period</div>`;
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    renderSessionsList(cwd, range);
+    return;
+  }
+
+  const BARS = 10;
+  const endIdx = sortedDays.length - offset * BARS;
+  const startIdx = Math.max(0, endIdx - BARS);
+  const visible = sortedDays.slice(startIdx, endIdx);
+
+  if (prevBtn) prevBtn.disabled = startIdx === 0;
+  if (nextBtn) nextBtn.disabled = offset === 0;
+
+  chartContainer.innerHTML = buildBarChartSVG(visible);
+  renderSessionsList(cwd, range);
+}
+
+function buildBarChartSVG(days) {
+  if (!days.length) return `<div class="no-data">No data</div>`;
+
+  const W = 420, H = 160;
+  const ML = 40, MR = 8, MT = 8, MB = 36;
+  const PW = W - ML - MR;
+  const PH = H - MT - MB;
+
+  const maxTok = Math.max(...days.map((d) => d.tokens), 1);
+  const spacing = PW / days.length;
+  const barW = Math.max(4, spacing - 3);
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((frac) => {
+    const val = frac * maxTok;
+    const y = MT + (1 - frac) * PH;
+    return `<line x1="${ML}" x2="${W - MR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#2d2c44" stroke-width="1"/>
+      <text x="${ML - 4}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" fill="#6b6990" font-size="9" font-family="Fira Code,monospace">${fmtK(Math.round(val))}</text>`;
+  }).join("");
+
+  const bars = days.map((d, i) => {
+    const x = ML + i * spacing + (spacing - barW) / 2;
+    const barH = Math.max(1, (d.tokens / maxTok) * PH);
+    const y = MT + PH - barH;
+    const label = d.date.slice(5); // MM-DD
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="2" fill="#9d7dfc" opacity="0.85"/>
+      <text x="${(x + barW / 2).toFixed(1)}" y="${(H - MB + 14).toFixed(1)}" text-anchor="middle" fill="#6b6990" font-size="9" font-family="DM Sans,system-ui">${label}</text>`;
+  }).join("");
+
+  return `<div class="chart-container"><svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">
+    ${yTicks}
+    <line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#2d2c44" stroke-width="1"/>
+    ${bars}
+  </svg></div>`;
+}
+
+function renderSessionsList(cwd, range) {
+  const list = document.getElementById("project-sessions-list");
+  if (!list || !lastTokenHistory) return;
+
+  let records = lastTokenHistory.filter((r) => r.cwd === cwd);
+  if (range !== "all") {
+    const days = range === "7d" ? 7 : 30;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    records = records.filter((r) => r.date >= cutoff.toISOString().slice(0, 10));
+  }
+
+  if (!records.length) { list.innerHTML = ""; return; }
+
+  const sorted = [...records].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const top = sorted.slice(0, 10);
+  const rowsHTML = top.map((r) => {
+    const tot = totalTok(r);
+    const eff = cacheEffPct(r);
+    return `<div class="today-row">
+      <span style="font-family:'Fira Code',monospace;font-size:0.75rem;color:var(--text-dim)">${r.date}</span>
+      <span style="font-family:'Fira Code',monospace;font-size:0.75rem">${fmtK(tot)} tok · ${r.turns || 0} turns${eff > 0 ? ` · ${eff}% cache` : ""}</span>
+    </div>`;
+  }).join("");
+
+  list.innerHTML = `<div class="section" style="padding:10px 14px">
+    <div class="section-title" style="margin-bottom:8px">Recent Sessions</div>
+    ${rowsHTML}
+    ${records.length > 10 ? `<div style="font-size:0.72rem;color:var(--text-dim);text-align:center;margin-top:6px">…and ${records.length - 10} more</div>` : ""}
+  </div>`;
+}
 
 // ── Settings ───────────────────────────────────────────────────────────────────
 const displayMode = document.getElementById("displayMode");
@@ -390,6 +798,7 @@ function saveSettings() {
       workFinished: { enabled: soundWorkFinishedEnabled.checked, file: soundWorkFinishedFile.value },
       thresholdCrossed: { enabled: soundThresholdEnabled.checked, file: soundThresholdFile.value },
     },
+    projectAliases: currentSettings.projectAliases || {},
   };
   currentSettings = settings;
   window.electronAPI?.saveSettings(settings);
@@ -483,6 +892,7 @@ window.onload = async () => {
     sessionPlan.value = settings.sessionPlan || 44000;
     weeklyPlan.value = settings.weeklyPlan || 200000;
     currentSettings = settings;
+    if (settings.projectAliases) currentSettings.projectAliases = settings.projectAliases;
     (settings.colorThresholds || []).forEach((t) =>
       colorContainer.appendChild(createColorRow(t.min, t.color))
     );
