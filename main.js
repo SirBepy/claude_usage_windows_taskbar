@@ -26,6 +26,14 @@ function showNotification(title, body) {
   try { new Notification({ title, body }).show(); } catch { /* app not ready */ }
 }
 
+async function recordTokenStats(payload) {
+  if (!payload?.session_id || !payload?.transcript_path) return;
+  const tokens = await parseTranscript(payload.transcript_path);
+  const date = new Date().toISOString().slice(0, 10);
+  appendSession({ sessionId: payload.session_id, cwd: payload.cwd, date, ...tokens });
+  dashboardWindow?.webContents.send("token-history-updated", loadTokenHistory());
+}
+
 const hookServer = http.createServer((req, res) => {
   if (req.method === "POST" && req.url === "/refresh") {
     res.writeHead(204).end();
@@ -33,6 +41,7 @@ const hookServer = http.createServer((req, res) => {
       if (payload && payload.cwd) {
         showNotification("Claude finished", path.basename(payload.cwd));
       }
+      recordTokenStats(payload).catch(console.error);
     });
     refreshWithAnimation(true).catch(console.error);
   } else if (req.method === "POST" && req.url === "/notify") {
@@ -61,6 +70,8 @@ const { fetchUsageFromPage } = require("./src/core/scraper");
 const { recordSnapshot, loadHistory, pruneHistory } = require("./src/core/history");
 const { clearClaudeCookies } = require("./src/core/session");
 const { loadSettings, saveSettings } = require("./src/core/settings");
+const { loadTokenHistory, appendSession, backfillAllTranscripts } = require("./src/core/token-stats");
+const { parseTranscript } = require("./src/core/transcript-parser");
 const {
   setupAutoUpdater,
   getUpdateState,
@@ -491,6 +502,8 @@ ipcMain.on("copy-logs", () => {
   clipboard.writeText(logBuffer.join("\n"));
 });
 ipcMain.handle("get-app-version", () => app.getVersion());
+ipcMain.handle("get-token-history", () => loadTokenHistory());
+ipcMain.handle("backfill-transcripts", () => backfillAllTranscripts());
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {

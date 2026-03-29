@@ -5,22 +5,6 @@
 
 
 
-## [T-015] Token stats parser and history storage
-**Status:** planned
-**Added:** 2026-03-29
-**Description:** Epic 2a. On Stop hook: stream the transcript JSONL line by line, sum `input_tokens` + `output_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens` from all `assistant` entries, and append one record to a persistent `token-history.json`. Also expose a "backfill" function that scans all existing `~/.claude/projects/` transcripts to pre-populate history. Gates T-016.
-**Questions:**
-- [x] Split from original T-015?: "Yes - parser+storage here, dashboard UI in T-016"
-
-**Plan:**
-1. Create `src/core/transcript-parser.js`: stream a JSONL file line by line with Node's `readline`, accumulate `usage` fields from `type === "assistant"` entries, return `{ inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, turns }`.
-2. Create `src/core/token-stats.js`: handles reading/writing `token-history.json` (stored in `app.getPath("userData")`). Exposes `appendSession({ sessionId, cwd, date, ...tokens })` and `loadHistory()`. Prunes duplicate `sessionId` entries on append.
-3. In `main.js`, update the `/refresh` handler: after receiving the body, extract `transcript_path` + `cwd`, call the parser, then call `appendSession`. Do this async - don't block the refresh animation.
-4. Add a `backfillAllTranscripts()` function in `token-stats.js`: glob `~/.claude/projects/**/*.jsonl`, skip any `sessionId` already in history, parse and append each. Expose via IPC so the dashboard can trigger it.
-5. Expose `loadHistory` and `backfillAllTranscripts` to the renderer via `ipcMain` and `preload.js`.
-
----
-
 ## [T-016] Token stats dashboard UI
 **Status:** planned
 **Added:** 2026-03-29

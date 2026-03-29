@@ -29,4 +29,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("history-updated", handler);
     return () => ipcRenderer.removeListener("history-updated", handler);
   },
+
+  // Token stats
+  getTokenHistory: () => ipcRenderer.invoke("get-token-history"),
+  backfillTranscripts: () => ipcRenderer.invoke("backfill-transcripts"),
+  onTokenHistoryUpdated: (cb) => {
+    const handler = (_, data) => cb(data);
+    ipcRenderer.on("token-history-updated", handler);
+    return () => ipcRenderer.removeListener("token-history-updated", handler);
+  },
 });
