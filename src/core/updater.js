@@ -23,12 +23,6 @@ function setupAutoUpdater(onStateChange) {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.logger = console; // allow logging to the console
 
-  autoUpdater.setFeedURL({
-    provider: "github",
-    owner: "SirBepy",
-    repo: "claude_usage_in_taskbar",
-  });
-
   autoUpdater.on("update-not-available", () => {
     updateState = "none";
     updateVersion = null;
