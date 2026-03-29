@@ -3,23 +3,6 @@
 <!-- last-id: 16 -->
 
 
-## [T-013] Project-aware "finished working" notification
-**Status:** planned
-**Added:** 2026-03-29
-**Description:** Epic 1a. When the Stop hook fires (POST /refresh), parse the request body to extract `cwd`, derive the project name (last path segment), and fire a native OS notification: "Claude finished working in <project>". Requires updating the hook script to pipe stdin into the POST body, and updating the server handler to read + parse it.
-**Questions:**
-- [x] Should notification include cache efficiency %?: "No - simple notification now, cache stats added in T-015"
-- [x] Include per-project emoji/custom name settings in T-013?: "No - use raw folder name for now, customization deferred"
-
-**Plan:**
-1. Add `Notification` to the electron destructure in `main.js` line 3.
-2. Update the `/refresh` handler to collect POST body chunks into a buffer, then parse JSON once the request ends.
-3. Extract `cwd` from the parsed payload, derive project name with `path.basename(cwd)`.
-4. Fire `new Notification({ title: 'Claude finished', body: projectName }).show()` — wrap in a try/catch so a malformed body never crashes the refresh flow.
-5. Ensure `refreshWithAnimation` is still called regardless of whether notification fires.
-6. Verify on Windows: notification appears in the system tray notification area after a Claude Code session ends.
-
----
 
 ## [T-014] "Waiting for input" notification
 **Status:** planned
@@ -29,10 +12,9 @@
 - [x] New endpoint or reuse /refresh?: "New endpoint POST /notify - cleaner separation"
 
 **Plan:**
-1. Add a `POST /notify` branch to the hook server in `main.js` (alongside the existing `/refresh` and `/quit` handlers). Collect body, parse JSON, extract `cwd`, fire `Notification` with title "Claude is waiting for your input" and body = `path.basename(cwd)`.
-2. In `~/.claude/settings.json`, add a `Notification` hook entry using the same curl pattern as the Stop hook: `curl -s -X POST http://127.0.0.1:27182/notify -H "Content-Type: application/json" -d @-`.
-3. Wrap body parsing in try/catch - a bad payload must never crash the server.
-4. Test: trigger a Claude session that prompts for user input and confirm the notification fires.
+1. ~~Add `POST /notify` to main.js~~ - done as part of T-013.
+2. In `~/.claude/settings.json`, add a `Notification` hook entry: `curl -s -X POST http://127.0.0.1:27182/notify -H "Content-Type: application/json" -d @-`.
+3. Test: trigger a Claude session that prompts for user input and confirm the notification fires.
 
 ---
 

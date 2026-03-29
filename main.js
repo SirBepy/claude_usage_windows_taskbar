@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, Tray, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, Notification } = require("electron");
 const path = require("path");
 const http = require("http");
 
@@ -11,10 +11,36 @@ app.disableHardwareAcceleration();
 
 // ── Hook server (Claude Code Stop hook → POST /refresh) ───────────────────────
 const HOOK_SERVER_PORT = 27182;
+
+function parseHookBody(req, cb) {
+  const chunks = [];
+  req.on("data", (c) => chunks.push(c));
+  req.on("end", () => {
+    try { cb(JSON.parse(Buffer.concat(chunks).toString())); }
+    catch { cb(null); }
+  });
+}
+
+function showNotification(title, body) {
+  try { new Notification({ title, body }).show(); } catch { /* app not ready */ }
+}
+
 const hookServer = http.createServer((req, res) => {
   if (req.method === "POST" && req.url === "/refresh") {
     res.writeHead(204).end();
+    parseHookBody(req, (payload) => {
+      if (payload && payload.cwd) {
+        showNotification("Claude finished", path.basename(payload.cwd));
+      }
+    });
     refreshWithAnimation(true).catch(console.error);
+  } else if (req.method === "POST" && req.url === "/notify") {
+    res.writeHead(204).end();
+    parseHookBody(req, (payload) => {
+      if (payload && payload.cwd) {
+        showNotification("Claude is waiting for your input", path.basename(payload.cwd));
+      }
+    });
   } else if (req.method === "POST" && req.url === "/quit") {
     res.writeHead(204).end();
     app.quit();
