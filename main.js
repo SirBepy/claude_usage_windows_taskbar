@@ -5,6 +5,7 @@ const path = require("path");
 const http = require("http");
 
 app.name = "Claude Usage Taskbar Tool";
+if (process.platform === "win32") app.setAppUserModelId("Claude Usage Taskbar Tool");
 
 // Disable hardware acceleration to save memory (prevents the GPU-process from spawning)
 app.disableHardwareAcceleration();
@@ -504,7 +505,6 @@ async function logout() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   if (process.platform === "darwin") app.dock.hide();
-  app.setAppUserModelId("Claude Usage Taskbar Tool");
   pruneHistory();
 
   createTray();
