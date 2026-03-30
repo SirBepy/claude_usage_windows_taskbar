@@ -3,6 +3,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, Notification } = require("electron");
 const path = require("path");
 const http = require("http");
+const { execFile } = require("child_process");
 
 app.name = "Claude Usage Taskbar Tool";
 if (process.platform === "win32") app.setAppUserModelId("Claude Usage Taskbar Tool");
@@ -22,8 +23,23 @@ function parseHookBody(req, cb) {
   });
 }
 
-function showNotification(title, body) {
-  try { new Notification({ title, body }).show(); } catch { /* app not ready */ }
+function focusVSCodeWindow(projectName) {
+  const safe = projectName.replace(/[^a-zA-Z0-9 _\-\.]/g, "");
+  const script = [
+    `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); }'`,
+    `$p = Get-Process -Name Code -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like '*${safe}*' } | Select-Object -First 1`,
+    `if (-not $p) { $p = Get-Process -Name Code -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -ne '' } | Select-Object -First 1 }`,
+    `if ($p) { [W]::ShowWindow($p.MainWindowHandle, 9); [W]::SetForegroundWindow($p.MainWindowHandle) }`,
+  ].join("; ");
+  execFile("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true }, () => {});
+}
+
+function showNotification(title, body, cwd) {
+  try {
+    const n = new Notification({ title, body });
+    if (cwd) n.on("click", () => focusVSCodeWindow(path.basename(cwd)));
+    n.show();
+  } catch { /* app not ready */ }
 }
 
 async function recordTokenStats(payload) {
@@ -39,7 +55,7 @@ const hookServer = http.createServer((req, res) => {
     res.writeHead(204).end();
     parseHookBody(req, (payload) => {
       if (payload && payload.cwd) {
-        showNotification("Claude finished", path.basename(payload.cwd));
+        showNotification("Claude finished", path.basename(payload.cwd), payload.cwd);
       }
       recordTokenStats(payload).catch(console.error);
     });
@@ -48,7 +64,7 @@ const hookServer = http.createServer((req, res) => {
     res.writeHead(204).end();
     parseHookBody(req, (payload) => {
       if (payload && payload.cwd) {
-        showNotification("Claude is waiting for your input", path.basename(payload.cwd));
+        showNotification("Claude is waiting for your input", path.basename(payload.cwd), payload.cwd);
       }
     });
   } else if (req.method === "POST" && req.url === "/quit") {
