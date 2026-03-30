@@ -63,17 +63,45 @@ function appendSession({ sessionId, cwd, date, inputTokens, outputTokens, cacheR
  * Best-effort decode of a Claude project dir name back to a filesystem path.
  * Claude encodes: each path separator (and colon on Windows) becomes "-".
  * Example: "c--Users-tecno-Desktop-Projects" → "c:\Users\tecno\Desktop\Projects"
+ *
+ * Because hyphens in folder names are also encoded as "-", we greedily walk
+ * the segments and check the filesystem: if joining the next segment with a
+ * hyphen produces an existing directory, prefer that over treating "-" as a
+ * path separator.
  */
 function decodeCwd(encoded) {
+  const sep = process.platform === "win32" ? "\\" : "/";
+  let root, parts;
+
   if (process.platform === "win32") {
     const driveSep = encoded.indexOf("--");
     if (driveSep !== -1) {
-      const drive = encoded.slice(0, driveSep);
-      const rest = encoded.slice(driveSep + 2).replace(/-/g, "\\");
-      return `${drive}:\\${rest}`;
+      root = encoded.slice(0, driveSep) + ":\\";
+      parts = encoded.slice(driveSep + 2).split("-");
+    } else {
+      return encoded;
+    }
+  } else {
+    root = "/";
+    parts = encoded.split("-");
+  }
+
+  // Greedy walk: try to merge consecutive segments with "-" when the merged
+  // name exists on disk, otherwise treat "-" as a path separator.
+  const resolved = [parts[0]];
+  for (let i = 1; i < parts.length; i++) {
+    const merged = resolved[resolved.length - 1] + "-" + parts[i];
+    const mergedPath = root + resolved.slice(0, -1).concat(merged).join(sep);
+    // Peek ahead: does mergedPath exist as a dir (or file for the last segment)?
+    try {
+      fs.statSync(mergedPath);
+      resolved[resolved.length - 1] = merged;
+    } catch {
+      resolved.push(parts[i]);
     }
   }
-  return "/" + encoded.replace(/-/g, "/");
+
+  return root + resolved.join(sep);
 }
 
 /**
@@ -96,6 +124,56 @@ function walkJsonl(dir) {
 }
 
 /**
+ * Build a map of sessionId → decoded cwd from ~/.claude/projects/ on disk.
+ * Used by both backfill and repair.
+ */
+function buildSessionCwdMap() {
+  const projectsDir = path.join(os.homedir(), ".claude", "projects");
+  const files = walkJsonl(projectsDir);
+  const map = new Map();
+  for (const filePath of files) {
+    const sessionId = path.basename(filePath, ".jsonl");
+    const projectDirName = path.basename(path.dirname(filePath));
+    map.set(sessionId, decodeCwd(projectDirName));
+  }
+  return map;
+}
+
+/**
+ * Re-decode cwds for all existing token-history entries using the current
+ * (filesystem-aware) decodeCwd. Fixes entries that were decoded with the
+ * old naive approach (e.g. "zng-app" → "zng\app").
+ *
+ * @returns {number} Number of entries repaired.
+ */
+function repairTokenHistoryCwds() {
+  const history = loadTokenHistory();
+  if (!history.length) return 0;
+
+  const cwdMap = buildSessionCwdMap();
+  let repaired = 0;
+
+  for (const record of history) {
+    const correctCwd = cwdMap.get(record.sessionId);
+    if (correctCwd && correctCwd !== record.cwd) {
+      record.cwd = correctCwd;
+      repaired++;
+    }
+  }
+
+  if (repaired > 0) {
+    try {
+      fs.writeFileSync(TOKEN_HISTORY_PATH, JSON.stringify(history, null, 2));
+    } catch (e) {
+      console.error("Failed to write repaired token history:", e);
+      return 0;
+    }
+  }
+
+  return repaired;
+}
+
+/**
  * Scan all existing ~/.claude/projects/**\/*.jsonl transcripts and backfill
  * token-history.json with any sessions not already recorded.
  *
@@ -104,6 +182,9 @@ function walkJsonl(dir) {
 async function backfillAllTranscripts() {
   const projectsDir = path.join(os.homedir(), ".claude", "projects");
   const files = walkJsonl(projectsDir);
+
+  // Repair any previously mis-decoded cwds before backfilling
+  repairTokenHistoryCwds();
 
   const existing = loadTokenHistory();
   const knownIds = new Set(existing.map((r) => r.sessionId));
