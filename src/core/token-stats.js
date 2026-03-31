@@ -85,16 +85,29 @@ function decodeCwd(encoded) {
     parts = encoded.split("-");
   }
 
+  // Collapse empty segments caused by "--" in the middle of the path.
+  // Claude encodes "." (dot prefix) as "-", so ".claude" → "--claude" which
+  // after splitting on "-" gives ["", "claude"]. Collapse these into ".claude".
+  const collapsed = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === "" && i + 1 < parts.length) {
+      collapsed.push("." + parts[i + 1]);
+      i++;
+    } else {
+      collapsed.push(parts[i]);
+    }
+  }
+
   // Greedy walk: at each "-" boundary, prefer merging with "-" or " " when the
   // merged path exists on disk, falling back to treating it as a path separator.
-  const resolved = [parts[0]];
-  for (let i = 1; i < parts.length; i++) {
+  const resolved = [collapsed[0]];
+  for (let i = 1; i < collapsed.length; i++) {
     const prefix = resolved.slice(0, -1);
     const last = resolved[resolved.length - 1];
     let merged = null;
 
     for (const joiner of ["-", " "]) {
-      const candidate = last + joiner + parts[i];
+      const candidate = last + joiner + collapsed[i];
       const candidatePath = root + prefix.concat(candidate).join(sep);
       try {
         fs.statSync(candidatePath);
@@ -106,7 +119,7 @@ function decodeCwd(encoded) {
     if (merged !== null) {
       resolved[resolved.length - 1] = merged;
     } else {
-      resolved.push(parts[i]);
+      resolved.push(collapsed[i]);
     }
   }
 
@@ -185,8 +198,10 @@ function repairTokenHistoryCwds() {
 /**
  * Scan all existing ~/.claude/projects/**\/*.jsonl transcripts and backfill
  * token-history.json with any sessions not already recorded.
+ * Subagent sessions are merged into their parent session record (or a new record
+ * keyed by the parent session ID is created if the parent isn't recorded yet).
  *
- * @returns {Promise<{processed:number, skipped:number}>}
+ * @returns {Promise<{processed:number, skipped:number, subProcessed:number, subSkipped:number}>}
  */
 async function backfillAllTranscripts() {
   const projectsDir = path.join(os.homedir(), ".claude", "projects");
@@ -195,20 +210,31 @@ async function backfillAllTranscripts() {
   // Repair any previously mis-decoded cwds before backfilling
   repairTokenHistoryCwds();
 
+  // Separate regular session files from subagent files
+  const regularFiles = [];
+  const subagentFiles = [];
+  for (const filePath of files) {
+    if (path.basename(path.dirname(filePath)) === "subagents") {
+      subagentFiles.push(filePath);
+    } else {
+      regularFiles.push(filePath);
+    }
+  }
+
+  // ── Regular sessions ─────────────────────────────────────────────────────
   const existing = loadTokenHistory();
   const knownIds = new Set(existing.map((r) => r.sessionId));
 
   let processed = 0;
   let skipped = 0;
 
-  for (const filePath of files) {
+  for (const filePath of regularFiles) {
     const sessionId = path.basename(filePath, ".jsonl");
     if (knownIds.has(sessionId)) { skipped++; continue; }
 
     const projectDirName = path.basename(path.dirname(filePath));
     const cwd = decodeCwd(projectDirName);
 
-    // Approximate date from file mtime, fallback to today
     let date;
     try {
       date = fs.statSync(filePath).mtime.toISOString().slice(0, 10);
@@ -222,7 +248,79 @@ async function backfillAllTranscripts() {
     processed++;
   }
 
-  return { processed, skipped };
+  // ── Subagent sessions ─────────────────────────────────────────────────────
+  // Re-load after regular processing so we can find any newly added parent records.
+  const history = loadTokenHistory();
+  const historyMap = new Map(history.map((r) => [r.sessionId, r]));
+
+  // Collect all agent IDs already merged into any record (for idempotency).
+  const mergedAgentIds = new Set();
+  for (const r of history) {
+    if (Array.isArray(r.mergedSubagents)) r.mergedSubagents.forEach((id) => mergedAgentIds.add(id));
+  }
+
+  let subProcessed = 0;
+  let subSkipped = 0;
+  let dirty = false;
+
+  for (const filePath of subagentFiles) {
+    const agentId = path.basename(filePath, ".jsonl");
+    if (mergedAgentIds.has(agentId)) { subSkipped++; continue; }
+
+    // Path: <projectsDir>/<encodedProject>/<parentSessionId>/subagents/<agentId>.jsonl
+    const parentSessionId = path.basename(path.dirname(path.dirname(filePath)));
+    const encodedProjectDir = path.basename(path.dirname(path.dirname(path.dirname(filePath))));
+    const cwd = decodeCwd(encodedProjectDir);
+
+    let date;
+    try {
+      date = fs.statSync(filePath).mtime.toISOString().slice(0, 10);
+    } catch {
+      date = new Date().toISOString().slice(0, 10);
+    }
+
+    const tokens = await parseTranscript(filePath);
+
+    let parentRecord = historyMap.get(parentSessionId);
+    if (!parentRecord) {
+      // Create a new record for this parent session, seeded with subagent tokens.
+      parentRecord = {
+        sessionId: parentSessionId,
+        cwd,
+        date,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        turns: 0,
+        recordedAt: new Date().toISOString(),
+        mergedSubagents: [],
+      };
+      historyMap.set(parentSessionId, parentRecord);
+      history.push(parentRecord);
+    }
+
+    parentRecord.inputTokens = (parentRecord.inputTokens || 0) + tokens.inputTokens;
+    parentRecord.outputTokens = (parentRecord.outputTokens || 0) + tokens.outputTokens;
+    parentRecord.cacheReadTokens = (parentRecord.cacheReadTokens || 0) + tokens.cacheReadTokens;
+    parentRecord.cacheCreationTokens = (parentRecord.cacheCreationTokens || 0) + tokens.cacheCreationTokens;
+    parentRecord.turns = (parentRecord.turns || 0) + tokens.turns;
+    if (!Array.isArray(parentRecord.mergedSubagents)) parentRecord.mergedSubagents = [];
+    parentRecord.mergedSubagents.push(agentId);
+    mergedAgentIds.add(agentId);
+    dirty = true;
+    subProcessed++;
+  }
+
+  if (dirty) {
+    try {
+      fs.writeFileSync(TOKEN_HISTORY_PATH, JSON.stringify(history, null, 2));
+    } catch (e) {
+      console.error("Failed to write subagent-merged token history:", e);
+    }
+  }
+
+  return { processed, skipped, subProcessed, subSkipped };
 }
 
 module.exports = { loadTokenHistory, appendSession, backfillAllTranscripts };
