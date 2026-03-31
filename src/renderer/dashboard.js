@@ -79,8 +79,20 @@ function getThresholdColor(value, thresholds) {
   return null;
 }
 
-function valueColor(pct) {
+function getPaceColor(pct, safePace, settings) {
+  const band = settings.paceBand ?? 10;
+  const pc = settings.paceColors || {};
+  if (pct < safePace - band) return pc.under || "#27ae60";
+  if (pct < safePace) return pc.nearSafe || "#f1c40f";
+  if (pct < safePace + band) return pc.nearOver || "#e67e22";
+  return pc.over || "#e74c3c";
+}
+
+function valueColor(pct, safePace) {
   if (currentSettings.dashboardUseColors === false) return "var(--text)";
+  if (currentSettings.colorMode === "pace" && safePace != null) {
+    return getPaceColor(pct, safePace, currentSettings);
+  }
   const c = getThresholdColor(pct, currentSettings.colorThresholds);
   return c || pctColor(pct);
 }
@@ -296,7 +308,7 @@ function renderHistory(history) {
         ${showSafePace ? `
         <div class="stat-values-row">
           <div class="stat-col">
-            <div class="stat-value" style="color:${valueColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>
+            <div class="stat-value" style="color:${valueColor(latest.session_pct, sessionSafePct)}">${fmtPct(latest.session_pct)}</div>
             <div class="stat-sublabel">current</div>
           </div>
           <div class="stat-col">
@@ -304,7 +316,7 @@ function renderHistory(history) {
             <div class="stat-sublabel">safe pace</div>
           </div>
         </div>` : `
-        <div class="stat-value" style="color:${valueColor(latest.session_pct)}">${fmtPct(latest.session_pct)}</div>`}
+        <div class="stat-value" style="color:${valueColor(latest.session_pct, sessionSafePct)}">${fmtPct(latest.session_pct)}</div>`}
         ${sessionReset ? `<div class="stat-sublabel">${sessionReset}</div>` : ""}
       </div>
       <div class="stat-card">
@@ -312,7 +324,7 @@ function renderHistory(history) {
         ${showSafePace ? `
         <div class="stat-values-row">
           <div class="stat-col">
-            <div class="stat-value" style="color:${valueColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>
+            <div class="stat-value" style="color:${valueColor(latest.weekly_pct, weeklySafePct)}">${fmtPct(latest.weekly_pct)}</div>
             <div class="stat-sublabel">current</div>
           </div>
           <div class="stat-col">
@@ -320,7 +332,7 @@ function renderHistory(history) {
             <div class="stat-sublabel">safe pace</div>
           </div>
         </div>` : `
-        <div class="stat-value" style="color:${valueColor(latest.weekly_pct)}">${fmtPct(latest.weekly_pct)}</div>`}
+        <div class="stat-value" style="color:${valueColor(latest.weekly_pct, weeklySafePct)}">${fmtPct(latest.weekly_pct)}</div>`}
         ${weeklyReset ? `<div class="stat-sublabel">${weeklyReset}</div>` : ""}
       </div>
     </div>
@@ -750,6 +762,14 @@ const dashboardUseColors = document.getElementById("dashboardUseColors");
 const sessionPlan = document.getElementById("sessionPlan");
 const weeklyPlan = document.getElementById("weeklyPlan");
 const colorContainer = document.getElementById("colorContainer");
+const colorMode = document.getElementById("colorMode");
+const thresholdSection = document.getElementById("thresholdSection");
+const paceSection = document.getElementById("paceSection");
+const paceBand = document.getElementById("paceBand");
+const paceColorUnder = document.getElementById("paceColorUnder");
+const paceColorNearSafe = document.getElementById("paceColorNearSafe");
+const paceColorNearOver = document.getElementById("paceColorNearOver");
+const paceColorOver = document.getElementById("paceColorOver");
 const addColorBtn = document.getElementById("addColorBtn");
 const soundWorkFinishedEnabled = document.getElementById("soundWorkFinishedEnabled");
 const soundWorkFinishedFile = document.getElementById("soundWorkFinishedFile");
@@ -785,6 +805,14 @@ function saveSettings() {
     dashboardUseColors: dashboardUseColors.checked,
     sessionPlan: parseInt(sessionPlan.value, 10) || 44000,
     weeklyPlan: parseInt(weeklyPlan.value, 10) || 200000,
+    colorMode: colorMode.value,
+    paceBand: parseInt(paceBand.value, 10) || 10,
+    paceColors: {
+      under: paceColorUnder.value,
+      nearSafe: paceColorNearSafe.value,
+      nearOver: paceColorNearOver.value,
+      over: paceColorOver.value,
+    },
     colorThresholds: Array.from(colorContainer.querySelectorAll(".color-row"))
       .map((row) => ({
         min: parseInt(row.querySelector(".color-min").value, 10),
@@ -830,7 +858,19 @@ function updateVisibilities() {
   colorOverlayModeSection.style.display = mode === "icon" ? "none" : "flex";
 }
 
+function updateColorModeVisibility() {
+  const isPace = colorMode.value === "pace";
+  thresholdSection.style.display = isPace ? "none" : "block";
+  paceSection.style.display = isPace ? "block" : "none";
+}
+
 displayMode.addEventListener("change", () => { updateVisibilities(); saveSettings(); });
+colorMode.addEventListener("change", () => { updateColorModeVisibility(); saveSettings(); });
+paceBand.addEventListener("change", saveSettings);
+paceColorUnder.addEventListener("change", saveSettings);
+paceColorNearSafe.addEventListener("change", saveSettings);
+paceColorNearOver.addEventListener("change", saveSettings);
+paceColorOver.addEventListener("change", saveSettings);
 
 function renderUpdateState(updateState) {
   if (updateState.state === "downloaded") {
@@ -889,6 +929,14 @@ window.onload = async () => {
     dashboardUseColors.checked = settings.dashboardUseColors !== false;
     sessionPlan.value = settings.sessionPlan || 44000;
     weeklyPlan.value = settings.weeklyPlan || 200000;
+    colorMode.value = settings.colorMode || "threshold";
+    paceBand.value = settings.paceBand ?? 10;
+    const pc = settings.paceColors || {};
+    paceColorUnder.value = pc.under || "#27ae60";
+    paceColorNearSafe.value = pc.nearSafe || "#f1c40f";
+    paceColorNearOver.value = pc.nearOver || "#e67e22";
+    paceColorOver.value = pc.over || "#e74c3c";
+    updateColorModeVisibility();
     currentSettings = settings;
     if (settings.projectAliases) currentSettings.projectAliases = settings.projectAliases;
     (settings.colorThresholds || []).forEach((t) =>

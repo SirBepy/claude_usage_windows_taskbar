@@ -18,6 +18,14 @@ const DEFAULT_SETTINGS = {
   overlayDisplay: "none",
   overlayStyle: "classic",
   colorOverlayMode: "number", // "number" | "background" | "none"
+  colorMode: "threshold", // "threshold" | "pace"
+  paceBand: 10,
+  paceColors: {
+    under: "#27ae60",
+    nearSafe: "#f1c40f",
+    nearOver: "#e67e22",
+    over: "#e74c3c",
+  },
   colorThresholds: [
     { min: 0, color: "#27ae60" },
     { min: 50, color: "#e67e22" },

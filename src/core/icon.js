@@ -104,8 +104,19 @@ function hexToRgb(hex) {
 }
 
 // Colors keyed by urgency from settings
-function urgencyRGB(pct, settings = {}) {
+function urgencyRGB(pct, settings = {}, safePace = null) {
   if (pct == null) return [74, 144, 226]; // blue  — loading / unknown
+
+  if (settings.colorMode === "pace" && safePace != null) {
+    const band = settings.paceBand ?? 10;
+    const pc = settings.paceColors || {};
+    let hex;
+    if (pct < safePace - band) hex = pc.under || "#27ae60";
+    else if (pct < safePace) hex = pc.nearSafe || "#f1c40f";
+    else if (pct < safePace + band) hex = pc.nearOver || "#e67e22";
+    else hex = pc.over || "#e74c3c";
+    return hexToRgb(hex);
+  }
 
   const thresholds = settings.colorThresholds || [
     { min: 0, color: "#27ae60" },
@@ -469,6 +480,8 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
   const pixels = new Uint8Array(SIZE * SIZE * 4);
   const track = [60, 60, 60];
   const mode = settings.displayMode || "both"; // icon | number | both
+  const sessionSafe = settings._sessionSafe ?? null;
+  const weeklySafe = settings._weeklySafe ?? null;
 
   // 1. Draw Background Visuals (Rings/Bars)
   if (mode === "icon" || mode === "both") {
@@ -480,7 +493,7 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         sessionPct,
         10.5,
         7.5,
-        urgencyRGB(sessionPct, settings),
+        urgencyRGB(sessionPct, settings, sessionSafe),
         track,
         80,
       );
@@ -489,7 +502,7 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         weeklyPct,
         5.5,
         3.5,
-        urgencyRGB(weeklyPct, settings),
+        urgencyRGB(weeklyPct, settings, weeklySafe),
         track,
         80,
       );
@@ -501,6 +514,7 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
     const overlayType = settings.overlayDisplay;
     if (overlayType === "session" || overlayType === "weekly") {
       const pct = overlayType === "session" ? sessionPct : weeklyPct;
+      const pctSafe = overlayType === "session" ? sessionSafe : weeklySafe;
       if (pct != null) {
         const val = Math.min(Math.round(pct), 99);
         const str = String(val);
@@ -534,13 +548,13 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
             sqX2,
             sqY2,
             3,
-            urgencyRGB(pct, settings),
+            urgencyRGB(pct, settings, pctSafe),
             230,
           );
           textX = sqX1 + Math.max(0, Math.floor((sq - totalWidth) / 2));
           textY = sqY1 + Math.max(0, Math.floor((sq - font.height) / 2));
         } else if (colorMode === "number") {
-          textColor = urgencyRGB(pct, settings);
+          textColor = urgencyRGB(pct, settings, pctSafe);
         }
         // "none" → white text, no background
 
@@ -598,7 +612,7 @@ function makeSpinFrame(frame, weeklyPct, settings = {}) {
       weeklyPct,
       5.5,
       3.5,
-      urgencyRGB(weeklyPct, settings),
+      urgencyRGB(weeklyPct, settings, settings._weeklySafe ?? null),
       track,
       80,
     );

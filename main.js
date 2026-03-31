@@ -85,6 +85,7 @@ const {
   parseSessionPct,
   parseWeeklyPct,
   buildTooltip,
+  calcSafePct,
 } = require("./src/core/usage-parser");
 const { fetchUsageFromPage } = require("./src/core/scraper");
 const { recordSnapshot, loadHistory, pruneHistory } = require("./src/core/history");
@@ -313,7 +314,12 @@ async function refresh(fromHook = false) {
 function updateTray() {
   if (!tray) return;
   const s = getActiveSettings();
-  tray.setImage(makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData), s));
+  const iconSettings = {
+    ...s,
+    _sessionSafe: calcSafePct(usageData?.five_hour?.resets_at, 5 * 3600000),
+    _weeklySafe: calcSafePct(usageData?.seven_day?.resets_at, 7 * 24 * 3600000),
+  };
+  tray.setImage(makeIcon(parseSessionPct(usageData), parseWeeklyPct(usageData), iconSettings));
   tray.setToolTip(buildTooltip(usageData, s));
 }
 

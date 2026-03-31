@@ -63,6 +63,15 @@ function hexToEmoji(hex) {
   return "⚪";
 }
 
+function getPaceColor(pct, safePace, settings) {
+  const band = settings.paceBand ?? 10;
+  const pc = settings.paceColors || {};
+  if (pct < safePace - band) return pc.under || "#27ae60";
+  if (pct < safePace) return pc.nearSafe || "#f1c40f";
+  if (pct < safePace + band) return pc.nearOver || "#e67e22";
+  return pc.over || "#e74c3c";
+}
+
 function calcSafePct(resetAt, windowMs) {
   if (!resetAt) return null;
   const diff = new Date(resetAt) - Date.now();
@@ -102,10 +111,15 @@ function buildTooltip(data, settings = {}) {
   const sessionTokens = estimateTokens && hasSession ? tokensLeft(session.utilization, settings.sessionPlan) : null;
   const weeklyTokens = estimateTokens && hasWeekly ? tokensLeft(weekly.utilization, settings.weeklyPlan) : null;
 
-  function pctStr(utilization) {
+  function pctStr(utilization, safePace) {
     const pct = `${utilization}%`;
     if (!useColors) return pct;
-    const hex = getThresholdColor(utilization, settings.colorThresholds);
+    let hex;
+    if (settings.colorMode === "pace" && safePace != null) {
+      hex = getPaceColor(utilization, safePace, settings);
+    } else {
+      hex = getThresholdColor(utilization, settings.colorThresholds);
+    }
     return hex ? `${hexToEmoji(hex)} ${pct}` : pct;
   }
 
@@ -115,7 +129,7 @@ function buildTooltip(data, settings = {}) {
     if (hasSession && hasWeekly) lines.push("Session\tWeekly");
 
     lines.push(
-      [hasSession ? pctStr(session.utilization) : null, hasWeekly ? pctStr(weekly.utilization) : null]
+      [hasSession ? pctStr(session.utilization, sessionSafe) : null, hasWeekly ? pctStr(weekly.utilization, weeklySafe) : null]
         .filter(Boolean).join("\t")
     );
 
@@ -141,7 +155,7 @@ function buildTooltip(data, settings = {}) {
   const lines = [];
 
   if (hasSession) {
-    const parts = [`Session  ${pctStr(session.utilization)}`];
+    const parts = [`Session  ${pctStr(session.utilization, sessionSafe)}`];
     if (showSafePace && sessionSafe !== null) parts.push(`${sessionSafe}%`);
     if (sTime) parts.push(sTime);
     if (sessionTokens) parts.push(sessionTokens);
@@ -149,7 +163,7 @@ function buildTooltip(data, settings = {}) {
   }
 
   if (hasWeekly) {
-    const parts = [`Weekly   ${pctStr(weekly.utilization)}`];
+    const parts = [`Weekly   ${pctStr(weekly.utilization, weeklySafe)}`];
     if (showSafePace && weeklySafe !== null) parts.push(`${weeklySafe}%`);
     if (wTime) parts.push(wTime);
     if (weeklyTokens) parts.push(weeklyTokens);
@@ -159,4 +173,4 @@ function buildTooltip(data, settings = {}) {
   return lines.join("\n");
 }
 
-module.exports = { parseSessionPct, parseWeeklyPct, buildTooltip };
+module.exports = { parseSessionPct, parseWeeklyPct, buildTooltip, calcSafePct };
