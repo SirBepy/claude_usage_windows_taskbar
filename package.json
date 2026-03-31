@@ -31,7 +31,8 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "artifactName": "Claude.Usage.Taskbar.Tool-${version}-${arch}-mac.${ext}"
     },
     "nsis": {
       "oneClick": true,
