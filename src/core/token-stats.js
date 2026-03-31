@@ -61,13 +61,12 @@ function appendSession({ sessionId, cwd, date, inputTokens, outputTokens, cacheR
 
 /**
  * Best-effort decode of a Claude project dir name back to a filesystem path.
- * Claude encodes: each path separator (and colon on Windows) becomes "-".
- * Example: "c--Users-tecno-Desktop-Projects" → "c:\Users\tecno\Desktop\Projects"
+ * Claude encodes path separators, spaces, and colons (Windows) all as "-".
+ * Example: "c--Users-tecno-My-Project" → "c:\Users\tecno\My Project"
  *
- * Because hyphens in folder names are also encoded as "-", we greedily walk
- * the segments and check the filesystem: if joining the next segment with a
- * hyphen produces an existing directory, prefer that over treating "-" as a
- * path separator.
+ * We greedily walk the segments and check the filesystem. At each step we try
+ * merging the next segment with "-" (hyphen in name) or " " (space in name)
+ * before falling back to treating it as a path separator.
  */
 function decodeCwd(encoded) {
   const sep = process.platform === "win32" ? "\\" : "/";
@@ -86,17 +85,27 @@ function decodeCwd(encoded) {
     parts = encoded.split("-");
   }
 
-  // Greedy walk: try to merge consecutive segments with "-" when the merged
-  // name exists on disk, otherwise treat "-" as a path separator.
+  // Greedy walk: at each "-" boundary, prefer merging with "-" or " " when the
+  // merged path exists on disk, falling back to treating it as a path separator.
   const resolved = [parts[0]];
   for (let i = 1; i < parts.length; i++) {
-    const merged = resolved[resolved.length - 1] + "-" + parts[i];
-    const mergedPath = root + resolved.slice(0, -1).concat(merged).join(sep);
-    // Peek ahead: does mergedPath exist as a dir (or file for the last segment)?
-    try {
-      fs.statSync(mergedPath);
+    const prefix = resolved.slice(0, -1);
+    const last = resolved[resolved.length - 1];
+    let merged = null;
+
+    for (const joiner of ["-", " "]) {
+      const candidate = last + joiner + parts[i];
+      const candidatePath = root + prefix.concat(candidate).join(sep);
+      try {
+        fs.statSync(candidatePath);
+        merged = candidate;
+        break;
+      } catch { /* try next joiner */ }
+    }
+
+    if (merged !== null) {
       resolved[resolved.length - 1] = merged;
-    } catch {
+    } else {
       resolved.push(parts[i]);
     }
   }
