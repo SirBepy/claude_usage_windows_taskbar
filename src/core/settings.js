@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   ],
   sounds: {
     workFinished: { enabled: false, file: "sound1.mp3" },
+    questionAsked: { enabled: false, file: "sound3.mp3" },
     thresholdCrossed: { enabled: false, file: "sound6.mp3" },
   },
 };

@@ -771,6 +771,30 @@
                 </div>
             </div>
             <div class="section">
+                <div class="section-title">Question Asked</div>
+                <div class="option">
+                    <span class="option-label">Enabled</span>
+                    <label class="switch">
+                        <input type="checkbox" id="soundQuestionAskedEnabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="option" id="soundQuestionAskedPicker" style="display:none">
+                    <span class="option-label" style="font-size:0.82rem;color:var(--text-dim)">Sound</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <select id="soundQuestionAskedFile">
+                            <option value="sound1.mp3">Sound 1</option>
+                            <option value="sound2.mp3">Sound 2</option>
+                            <option value="sound3.mp3">Sound 3</option>
+                            <option value="sound4.mp3">Sound 4</option>
+                            <option value="sound5.mp3">Sound 5</option>
+                            <option value="sound6.mp3">Sound 6</option>
+                        </select>
+                        <button class="btn-secondary" id="previewQuestionAsked" style="padding:3px 10px;font-size:0.8rem">▶</button>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
                 <div class="section-title">Threshold Crossed</div>
                 <div class="option">
                     <span class="option-label">Enabled</span>
@@ -821,10 +845,10 @@
     <div id="view-stats-project" class="view hidden">
         <div class="view-header">
             <button class="icon-btn" id="projectDetailBackBtn" title="Back">←</button>
-            <h2 id="projectDetailTitle" style="font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Project</h2>
+            <h2 id="projectDetailTitle" style="font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="Click to rename">Project</h2>
+            <input id="projectDetailTitleInput" style="display:none;flex:1;font-family:'Manrope',system-ui,sans-serif;font-weight:600;font-size:0.85rem;text-align:center;background:var(--surface-alt);color:var(--text);border:1px solid var(--primary);padding:2px 8px;border-radius:6px;outline:none">
             <div style="width:32px"></div>
         </div>
-        <div id="projectDetailPath" style="padding:2px 14px 6px;font-size:0.68rem;color:var(--text-dim);font-family:'Fira Code',monospace;word-break:break-all;flex-shrink:0"></div>
         <div class="view-body">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                 <div class="range-toggle">
@@ -839,12 +863,12 @@
             </div>
             <div id="project-chart-container"></div>
             <div id="project-sessions-list" style="margin-top:12px"></div>
-            <div style="padding:10px 0 4px">
-                <div class="section-title" style="margin-bottom:6px;font-size:0.72rem">Display name</div>
+            <div id="projectDetailPath" style="padding:10px 0 4px;font-size:0.68rem;color:var(--text-dim);font-family:'Fira Code',monospace;word-break:break-all"></div>
+            <div style="padding:4px 0 8px">
+                <div class="section-title" style="margin-bottom:8px;font-size:0.72rem">Open project</div>
                 <div style="display:flex;gap:8px">
-                    <input id="project-alias-input" placeholder="e.g. 🚀 My Project"
-                        style="flex:1;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;font-family:'DM Sans',system-ui,sans-serif;font-size:0.88rem">
-                    <button class="btn-primary" id="project-alias-save" style="padding:5px 12px;font-size:0.8rem">Save</button>
+                    <button class="btn-secondary" id="openExplorerBtn" style="flex:1;font-size:0.8rem">File Explorer</button>
+                    <button class="btn-secondary" id="openVSCodeBtn" style="flex:1;font-size:0.8rem">VSCode</button>
                 </div>
             </div>
         </div>

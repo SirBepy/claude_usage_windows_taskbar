@@ -400,9 +400,14 @@ function projectLabel(cwd) {
   return emoji && !name.startsWith(emoji) ? `${emoji} ${name}` : name;
 }
 
+function isSubagentCwd(cwd) {
+  return cwd && /[/\\]\.claude[/\\]subagents[/\\]/i.test(cwd);
+}
+
 function aggregateByProject(tokenHistory) {
   const map = new Map();
   for (const r of tokenHistory) {
+    if (isSubagentCwd(r.cwd)) continue;
     const key = r.cwd || "(unknown)";
     if (!map.has(key)) map.set(key, { cwd: key, sessions: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, turns: 0, lastDate: "" });
     const p = map.get(key);
@@ -561,23 +566,44 @@ function openProjectDetail(cwd) {
   projectDetailState.cwd = cwd;
   projectDetailState.offset = 0;
   const title = document.getElementById("projectDetailTitle");
+  const titleInput = document.getElementById("projectDetailTitleInput");
   if (title) title.textContent = projectLabel(cwd);
   const pathEl = document.getElementById("projectDetailPath");
   if (pathEl) pathEl.textContent = cwd || "";
 
-  const aliasInput = document.getElementById("project-alias-input");
-  const aliasSave = document.getElementById("project-alias-save");
-  if (aliasInput) aliasInput.value = projectLabel(cwd);
-  if (aliasSave) {
-    aliasSave.onclick = () => {
-      const name = aliasInput.value.trim();
-      if (!currentSettings.projectAliases) currentSettings.projectAliases = {};
-      currentSettings.projectAliases[cwd] = { name };
-      saveSettings();
-      if (title) title.textContent = projectLabel(cwd);
-      renderStats(lastTokenHistory);
+  // Inline rename: click title to edit
+  if (title && titleInput) {
+    title.onclick = () => {
+      titleInput.value = projectLabel(cwd);
+      title.style.display = "none";
+      titleInput.style.display = "";
+      titleInput.focus();
+      titleInput.select();
+    };
+    const commitRename = () => {
+      const name = titleInput.value.trim();
+      titleInput.style.display = "none";
+      title.style.display = "";
+      if (name) {
+        if (!currentSettings.projectAliases) currentSettings.projectAliases = {};
+        currentSettings.projectAliases[cwd] = { name };
+        saveSettings();
+        title.textContent = projectLabel(cwd);
+        renderStats(lastTokenHistory);
+      }
+    };
+    titleInput.onblur = commitRename;
+    titleInput.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); titleInput.blur(); }
+      if (e.key === "Escape") { titleInput.value = projectLabel(cwd); titleInput.blur(); }
     };
   }
+
+  // Open project buttons
+  const explorerBtn = document.getElementById("openExplorerBtn");
+  const vscodeBtn = document.getElementById("openVSCodeBtn");
+  if (explorerBtn) explorerBtn.onclick = () => window.electronAPI.openInExplorer(cwd);
+  if (vscodeBtn) vscodeBtn.onclick = () => window.electronAPI.openInVSCode(cwd);
 
   renderProjectDetail();
   showView("stats-project");
@@ -728,6 +754,9 @@ const addColorBtn = document.getElementById("addColorBtn");
 const soundWorkFinishedEnabled = document.getElementById("soundWorkFinishedEnabled");
 const soundWorkFinishedFile = document.getElementById("soundWorkFinishedFile");
 const soundWorkFinishedPicker = document.getElementById("soundWorkFinishedPicker");
+const soundQuestionAskedEnabled = document.getElementById("soundQuestionAskedEnabled");
+const soundQuestionAskedFile = document.getElementById("soundQuestionAskedFile");
+const soundQuestionAskedPicker = document.getElementById("soundQuestionAskedPicker");
 const soundThresholdEnabled = document.getElementById("soundThresholdEnabled");
 const soundThresholdFile = document.getElementById("soundThresholdFile");
 const soundThresholdPicker = document.getElementById("soundThresholdPicker");
@@ -764,6 +793,7 @@ function saveSettings() {
       .sort((a, b) => a.min - b.min),
     sounds: {
       workFinished: { enabled: soundWorkFinishedEnabled.checked, file: soundWorkFinishedFile.value },
+      questionAsked: { enabled: soundQuestionAskedEnabled.checked, file: soundQuestionAskedFile.value },
       thresholdCrossed: { enabled: soundThresholdEnabled.checked, file: soundThresholdFile.value },
     },
     projectAliases: currentSettings.projectAliases || {},
@@ -870,9 +900,13 @@ window.onload = async () => {
     const tc = sfx.thresholdCrossed || {};
     soundWorkFinishedEnabled.checked = wf.enabled || false;
     soundWorkFinishedFile.value = wf.file || "sound1.mp3";
+    const qa = sfx.questionAsked || {};
+    soundQuestionAskedEnabled.checked = qa.enabled || false;
+    soundQuestionAskedFile.value = qa.file || "sound3.mp3";
     soundThresholdEnabled.checked = tc.enabled || false;
     soundThresholdFile.value = tc.file || "sound6.mp3";
     soundWorkFinishedPicker.style.display = soundWorkFinishedEnabled.checked ? "flex" : "none";
+    soundQuestionAskedPicker.style.display = soundQuestionAskedEnabled.checked ? "flex" : "none";
     soundThresholdPicker.style.display = soundThresholdEnabled.checked ? "flex" : "none";
   }
 
@@ -895,15 +929,23 @@ window.onload = async () => {
     soundWorkFinishedPicker.style.display = soundWorkFinishedEnabled.checked ? "flex" : "none";
     saveSettings();
   });
+  soundQuestionAskedEnabled.addEventListener("change", () => {
+    soundQuestionAskedPicker.style.display = soundQuestionAskedEnabled.checked ? "flex" : "none";
+    saveSettings();
+  });
   soundThresholdEnabled.addEventListener("change", () => {
     soundThresholdPicker.style.display = soundThresholdEnabled.checked ? "flex" : "none";
     saveSettings();
   });
   soundWorkFinishedFile.addEventListener("change", saveSettings);
+  soundQuestionAskedFile.addEventListener("change", saveSettings);
   soundThresholdFile.addEventListener("change", saveSettings);
 
   document.getElementById("previewWorkFinished").onclick = () => {
     new Audio(`../assets/sounds/${soundWorkFinishedFile.value}`).play().catch(() => {});
+  };
+  document.getElementById("previewQuestionAsked").onclick = () => {
+    new Audio(`../assets/sounds/${soundQuestionAskedFile.value}`).play().catch(() => {});
   };
   document.getElementById("previewThreshold").onclick = () => {
     new Audio(`../assets/sounds/${soundThresholdFile.value}`).play().catch(() => {});

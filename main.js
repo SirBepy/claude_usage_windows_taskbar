@@ -1,6 +1,6 @@
 "use strict";
 
-const { app, BrowserWindow, Tray, Menu, ipcMain, Notification } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, Notification, shell } = require("electron");
 const path = require("path");
 const http = require("http");
 const { execFile } = require("child_process");
@@ -65,6 +65,10 @@ const hookServer = http.createServer((req, res) => {
     parseHookBody(req, (payload) => {
       if (payload && payload.cwd) {
         showNotification("Claude is waiting for your input", path.basename(payload.cwd), payload.cwd);
+      }
+      const sfx = settings.sounds || {};
+      if (sfx.questionAsked?.enabled) {
+        playSound(sfx.questionAsked.file);
       }
     });
   } else if (req.method === "POST" && req.url === "/quit") {
@@ -520,6 +524,11 @@ ipcMain.on("copy-logs", () => {
 ipcMain.handle("get-app-version", () => app.getVersion());
 ipcMain.handle("get-token-history", () => loadTokenHistory());
 ipcMain.handle("backfill-transcripts", () => backfillAllTranscripts());
+ipcMain.on("open-in-explorer", (_, folderPath) => shell.openPath(folderPath));
+ipcMain.on("open-in-vscode", (_, folderPath) => {
+  const cmd = process.platform === "win32" ? "code.cmd" : "code";
+  execFile(cmd, [folderPath], { windowsHide: true }, () => {});
+});
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {

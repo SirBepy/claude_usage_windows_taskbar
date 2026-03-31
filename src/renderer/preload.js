@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("history-updated", handler);
   },
 
+  // Open project
+  openInExplorer: (folderPath) => ipcRenderer.send("open-in-explorer", folderPath),
+  openInVSCode: (folderPath) => ipcRenderer.send("open-in-vscode", folderPath),
+
   // Token stats
   getTokenHistory: () => ipcRenderer.invoke("get-token-history"),
   backfillTranscripts: () => ipcRenderer.invoke("backfill-transcripts"),
