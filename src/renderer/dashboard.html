@@ -729,9 +729,46 @@
         </div>
         <div class="view-body">
             <div class="section">
+                <div class="option">
+                    <span class="option-label">Color Mode</span>
+                    <select id="colorMode">
+                        <option value="threshold">Threshold</option>
+                        <option value="pace">Safe Pace</option>
+                    </select>
+                </div>
+            </div>
+            <div class="section" id="thresholdSection">
                 <div id="colorContainer"></div>
                 <button class="btn-secondary" id="addColorBtn"
                     style="margin-top: 10px; width: 100%; font-size: 0.8rem;">+ Add Color Threshold</button>
+            </div>
+            <div class="section" id="paceSection" style="display:none">
+                <div class="option">
+                    <span class="option-label">Band %</span>
+                    <input type="number" id="paceBand" value="10" min="0" max="50"
+                        style="width:60px;background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:4px 6px;border-radius:6px;font-family:'DM Sans',system-ui,sans-serif;">
+                </div>
+                <div class="section-title" style="margin-top:10px">Colors</div>
+                <div class="option">
+                    <span class="option-label">Under</span>
+                    <input type="color" id="paceColorUnder" value="#27ae60"
+                        style="width:30px;height:24px;border:none;background:none;cursor:pointer;">
+                </div>
+                <div class="option">
+                    <span class="option-label">Near (safe side)</span>
+                    <input type="color" id="paceColorNearSafe" value="#f1c40f"
+                        style="width:30px;height:24px;border:none;background:none;cursor:pointer;">
+                </div>
+                <div class="option">
+                    <span class="option-label">Near (over side)</span>
+                    <input type="color" id="paceColorNearOver" value="#e67e22"
+                        style="width:30px;height:24px;border:none;background:none;cursor:pointer;">
+                </div>
+                <div class="option">
+                    <span class="option-label">Over</span>
+                    <input type="color" id="paceColorOver" value="#e74c3c"
+                        style="width:30px;height:24px;border:none;background:none;cursor:pointer;">
+                </div>
             </div>
         </div>
     </div>
