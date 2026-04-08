@@ -91,7 +91,7 @@ const { fetchUsageFromPage } = require("./src/core/scraper");
 const { recordSnapshot, loadHistory, pruneHistory } = require("./src/core/history");
 const { clearClaudeCookies } = require("./src/core/session");
 const { loadSettings, saveSettings } = require("./src/core/settings");
-const { loadTokenHistory, appendSession, backfillAllTranscripts } = require("./src/core/token-stats");
+const { loadTokenHistory, appendSession, backfillAllTranscripts, repairTimestamps, getActiveSessions } = require("./src/core/token-stats");
 const { parseTranscript } = require("./src/core/transcript-parser");
 const {
   setupAutoUpdater,
@@ -242,7 +242,7 @@ function resetDisplayMode() {
   updateTray();
 }
 
-const POLL_MS = 30 * 60 * 1000;
+const POLL_MS = 10 * 60 * 1000;
 
 // ── Usage fetching ────────────────────────────────────────────────────────────
 async function fetchUsage() {
@@ -529,6 +529,7 @@ ipcMain.on("copy-logs", () => {
 });
 ipcMain.handle("get-app-version", () => app.getVersion());
 ipcMain.handle("get-token-history", () => loadTokenHistory());
+ipcMain.handle("get-active-sessions", () => getActiveSessions());
 ipcMain.handle("backfill-transcripts", () => backfillAllTranscripts());
 ipcMain.on("open-in-explorer", (_, folderPath) => shell.openPath(folderPath));
 ipcMain.on("open-in-vscode", (_, folderPath) => {
@@ -550,6 +551,7 @@ async function logout() {
 app.whenReady().then(async () => {
   if (process.platform === "darwin") app.dock.hide();
   pruneHistory();
+  repairTimestamps();
 
   createTray();
   createAudioWindow();

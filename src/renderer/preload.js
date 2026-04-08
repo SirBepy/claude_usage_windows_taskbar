@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Token stats
   getTokenHistory: () => ipcRenderer.invoke("get-token-history"),
+  getActiveSessions: () => ipcRenderer.invoke("get-active-sessions"),
   backfillTranscripts: () => ipcRenderer.invoke("backfill-transcripts"),
   onTokenHistoryUpdated: (cb) => {
     const handler = (_, data) => cb(data);
