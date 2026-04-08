@@ -417,17 +417,6 @@
             margin-bottom: 14px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.35);
         }
-        .today-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 0;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.82rem;
-        }
-        .today-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .today-row:first-child { padding-top: 0; }
-
         /* ── Stats table ── */
         .stats-table {
             width: 100%;
@@ -661,6 +650,16 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="option">
+                    <span class="option-label">Session Plan</span>
+                    <input type="number" id="sessionPlan"
+                        style="background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;outline:none;width:100px;font-family:'DM Sans',system-ui,sans-serif;">
+                </div>
+                <div class="option">
+                    <span class="option-label">Weekly Plan</span>
+                    <input type="number" id="weeklyPlan"
+                        style="background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;outline:none;width:100px;font-family:'DM Sans',system-ui,sans-serif;">
+                </div>
             </div>
         </div>
     </div>
@@ -703,16 +702,6 @@
                         <input type="checkbox" id="dashboardUseColors">
                         <span class="slider"></span>
                     </label>
-                </div>
-                <div class="option">
-                    <span class="option-label">Session Plan</span>
-                    <input type="number" id="sessionPlan"
-                        style="background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;outline:none;width:100px;font-family:'DM Sans',system-ui,sans-serif;">
-                </div>
-                <div class="option">
-                    <span class="option-label">Weekly Plan</span>
-                    <input type="number" id="weeklyPlan"
-                        style="background:var(--surface-alt);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:6px;outline:none;width:100px;font-family:'DM Sans',system-ui,sans-serif;">
                 </div>
             </div>
         </div>
@@ -873,6 +862,20 @@
                 <button class="btn-secondary" id="backfillBtn" style="width:100%;font-size:0.8rem">↺ Rebuild History</button>
                 <div id="backfill-status" style="text-align:center;font-size:0.72rem;color:var(--text-dim);margin-top:6px;display:none"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         View: Graph Detail
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="view-graph-detail" class="view hidden">
+        <div class="view-header">
+            <button class="icon-btn" id="graphDetailBackBtn" title="Back">←</button>
+            <h2 id="graphDetailTitle">Session</h2>
+            <div style="width:32px"></div>
+        </div>
+        <div class="view-body">
+            <div id="graph-detail-content"></div>
         </div>
     </div>
 
