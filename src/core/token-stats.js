@@ -32,7 +32,7 @@ function loadTokenHistory() {
  *
  * @returns {object[]|null} Updated array, or null on write failure.
  */
-function appendSession({ sessionId, cwd, date, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, turns }) {
+function appendSession({ sessionId, cwd, date, startedAt, lastActiveAt, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, turns }) {
   const history = loadTokenHistory();
 
   if (history.some((r) => r.sessionId === sessionId)) return history;
@@ -46,6 +46,8 @@ function appendSession({ sessionId, cwd, date, inputTokens, outputTokens, cacheR
     cacheReadTokens,
     cacheCreationTokens,
     turns,
+    startedAt: startedAt || new Date().toISOString(),
+    lastActiveAt: lastActiveAt || new Date().toISOString(),
     recordedAt: new Date().toISOString(),
   });
 
@@ -162,6 +164,60 @@ function buildSessionCwdMap() {
 }
 
 /**
+ * Build a map of sessionId → filePath from ~/.claude/projects/ on disk.
+ */
+function buildSessionFileMap() {
+  const projectsDir = path.join(os.homedir(), ".claude", "projects");
+  const files = walkJsonl(projectsDir);
+  const map = new Map();
+  for (const filePath of files) {
+    const sessionId = path.basename(filePath, ".jsonl");
+    map.set(sessionId, filePath);
+  }
+  return map;
+}
+
+/**
+ * Populate missing startedAt / lastActiveAt on existing token-history records
+ * by reading file stats (birthtime, mtime) from the corresponding .jsonl files.
+ * Runs on startup, only touches records that need repair.
+ *
+ * @returns {number} Number of entries repaired.
+ */
+function repairTimestamps() {
+  const history = loadTokenHistory();
+  if (!history.length) return 0;
+
+  const needsRepair = history.some((r) => !r.startedAt || !r.lastActiveAt);
+  if (!needsRepair) return 0;
+
+  const fileMap = buildSessionFileMap();
+  let repaired = 0;
+
+  for (const record of history) {
+    if (record.startedAt && record.lastActiveAt) continue;
+    const filePath = fileMap.get(record.sessionId);
+    if (!filePath) continue;
+    try {
+      const stat = fs.statSync(filePath);
+      if (!record.startedAt) { record.startedAt = stat.birthtime.toISOString(); repaired++; }
+      if (!record.lastActiveAt) { record.lastActiveAt = stat.mtime.toISOString(); repaired++; }
+    } catch { /* skip unreadable files */ }
+  }
+
+  if (repaired > 0) {
+    try {
+      fs.writeFileSync(TOKEN_HISTORY_PATH, JSON.stringify(history, null, 2));
+    } catch (e) {
+      console.error("Failed to write timestamp-repaired token history:", e);
+      return 0;
+    }
+  }
+
+  return repaired;
+}
+
+/**
  * Re-decode cwds for all existing token-history entries using the current
  * (filesystem-aware) decodeCwd. Fixes entries that were decoded with the
  * old naive approach (e.g. "zng-app" → "zng\app").
@@ -235,15 +291,21 @@ async function backfillAllTranscripts() {
     const projectDirName = path.basename(path.dirname(filePath));
     const cwd = decodeCwd(projectDirName);
 
-    let date;
+    let date, startedAt, lastActiveAt;
     try {
-      date = fs.statSync(filePath).mtime.toISOString().slice(0, 10);
+      const stat = fs.statSync(filePath);
+      date = stat.mtime.toISOString().slice(0, 10);
+      startedAt = stat.birthtime.toISOString();
+      lastActiveAt = stat.mtime.toISOString();
     } catch {
-      date = new Date().toISOString().slice(0, 10);
+      const now = new Date().toISOString();
+      date = now.slice(0, 10);
+      startedAt = now;
+      lastActiveAt = now;
     }
 
     const tokens = await parseTranscript(filePath);
-    appendSession({ sessionId, cwd, date, ...tokens });
+    appendSession({ sessionId, cwd, date, startedAt, lastActiveAt, ...tokens });
     knownIds.add(sessionId);
     processed++;
   }
@@ -272,11 +334,17 @@ async function backfillAllTranscripts() {
     const encodedProjectDir = path.basename(path.dirname(path.dirname(path.dirname(filePath))));
     const cwd = decodeCwd(encodedProjectDir);
 
-    let date;
+    let date, startedAt, lastActiveAt;
     try {
-      date = fs.statSync(filePath).mtime.toISOString().slice(0, 10);
+      const stat = fs.statSync(filePath);
+      date = stat.mtime.toISOString().slice(0, 10);
+      startedAt = stat.birthtime.toISOString();
+      lastActiveAt = stat.mtime.toISOString();
     } catch {
-      date = new Date().toISOString().slice(0, 10);
+      const now = new Date().toISOString();
+      date = now.slice(0, 10);
+      startedAt = now;
+      lastActiveAt = now;
     }
 
     const tokens = await parseTranscript(filePath);
@@ -293,6 +361,8 @@ async function backfillAllTranscripts() {
         cacheReadTokens: 0,
         cacheCreationTokens: 0,
         turns: 0,
+        startedAt,
+        lastActiveAt,
         recordedAt: new Date().toISOString(),
         mergedSubagents: [],
       };
@@ -305,6 +375,8 @@ async function backfillAllTranscripts() {
     parentRecord.cacheReadTokens = (parentRecord.cacheReadTokens || 0) + tokens.cacheReadTokens;
     parentRecord.cacheCreationTokens = (parentRecord.cacheCreationTokens || 0) + tokens.cacheCreationTokens;
     parentRecord.turns = (parentRecord.turns || 0) + tokens.turns;
+    if (startedAt < (parentRecord.startedAt || "Z")) parentRecord.startedAt = startedAt;
+    if (lastActiveAt > (parentRecord.lastActiveAt || "")) parentRecord.lastActiveAt = lastActiveAt;
     if (!Array.isArray(parentRecord.mergedSubagents)) parentRecord.mergedSubagents = [];
     parentRecord.mergedSubagents.push(agentId);
     mergedAgentIds.add(agentId);
@@ -323,4 +395,58 @@ async function backfillAllTranscripts() {
   return { processed, skipped, subProcessed, subSkipped };
 }
 
-module.exports = { loadTokenHistory, appendSession, backfillAllTranscripts };
+/**
+ * Find active (in-progress) Claude Code sessions that aren't in token-history yet.
+ * Scans ~/.claude/projects for .jsonl files modified in the last 12 hours whose
+ * sessionId isn't already recorded. Returns lightweight records suitable for
+ * merging into the dashboard's project lists.
+ *
+ * @returns {Promise<object[]>} Array of { sessionId, cwd, date, startedAt, lastActiveAt, live, inputTokens, ... }
+ */
+async function getActiveSessions() {
+  const history = loadTokenHistory();
+  const knownIds = new Set(history.map((r) => r.sessionId));
+
+  const projectsDir = path.join(os.homedir(), ".claude", "projects");
+  const cutoff = Date.now() - 12 * 3_600_000;
+  const results = [];
+
+  let projectDirs;
+  try {
+    projectDirs = fs.readdirSync(projectsDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+  } catch { return []; }
+
+  for (const projEntry of projectDirs) {
+    const projPath = path.join(projectsDir, projEntry.name);
+    let entries;
+    try {
+      entries = fs.readdirSync(projPath, { withFileTypes: true });
+    } catch { continue; }
+
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+      const filePath = path.join(projPath, entry.name);
+      const sessionId = path.basename(filePath, ".jsonl");
+      if (knownIds.has(sessionId)) continue;
+
+      try {
+        const stat = fs.statSync(filePath);
+        if (stat.mtime.getTime() < cutoff) continue;
+        const tokens = await parseTranscript(filePath);
+        results.push({
+          sessionId,
+          cwd: decodeCwd(projEntry.name),
+          date: stat.mtime.toISOString().slice(0, 10),
+          startedAt: stat.birthtime.toISOString(),
+          lastActiveAt: stat.mtime.toISOString(),
+          live: true,
+          ...tokens,
+        });
+      } catch { continue; }
+    }
+  }
+
+  return results;
+}
+
+module.exports = { loadTokenHistory, appendSession, backfillAllTranscripts, repairTimestamps, getActiveSessions };
