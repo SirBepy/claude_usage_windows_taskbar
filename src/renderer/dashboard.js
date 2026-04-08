@@ -1,11 +1,13 @@
 "use strict";
 
 // ── View navigation ────────────────────────────────────────────────────────────
-const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-sounds", "stats", "stats-project"];
+const VIEWS = ["dashboard", "settings", "settings-icon", "settings-tooltip", "settings-dashboard", "settings-colors", "settings-sounds", "stats", "stats-project", "graph-detail"];
 
 let activeView = "dashboard";
+let previousView = "dashboard";
 
 function showView(name) {
+  previousView = activeView;
   activeView = name;
   for (const id of VIEWS) {
     document.getElementById(`view-${id}`).classList.toggle("hidden", id !== name);
@@ -36,7 +38,8 @@ document.getElementById("statsBtn").onclick = () => {
 document.getElementById("statsBackBtn").onclick = () => {
   showView("dashboard");
 };
-document.getElementById("projectDetailBackBtn").onclick = () => showView("stats");
+document.getElementById("projectDetailBackBtn").onclick = () => showView(previousView === "stats-project" ? "stats" : previousView);
+document.getElementById("graphDetailBackBtn").onclick = () => showView("dashboard");
 
 // Stats-project range + scroll buttons
 document.querySelectorAll(".range-btn").forEach((btn) => {
@@ -57,10 +60,13 @@ document.getElementById("chartNextBtn").onclick = () => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function hourToMs(h) {
-  // "YYYY-MM-DDTHH" → local-time epoch ms
-  const [date, hour] = h.split("T");
+  // "YYYY-MM-DDTHH" or "YYYY-MM-DDTHH:MM" → local-time epoch ms
+  const [date, time] = h.split("T");
   const [y, m, d] = date.split("-").map(Number);
-  return new Date(y, m - 1, d, Number(hour)).getTime();
+  const parts = time.split(":");
+  const hr = Number(parts[0]);
+  const min = parts[1] ? Number(parts[1]) : 0;
+  return new Date(y, m - 1, d, hr, min).getTime();
 }
 
 function pctColor(v) {
@@ -110,6 +116,11 @@ function fmtResetTime(isoStr) {
   if (diffMs <= 0) return "now";
   const h = Math.floor(diffMs / 3_600_000);
   const m = Math.floor((diffMs % 3_600_000) / 60_000);
+  if (h > 12) {
+    const day = d.toLocaleDateString("en-US", { weekday: "short" });
+    const hour = d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
+    return `resets ${day} ${hour}`;
+  }
   if (h > 0) return `resets in ${h}h ${m}m`;
   return `resets in ${m}m`;
 }
@@ -121,8 +132,6 @@ let weeklyPageOffset = 0;   // 0 = current week, 1 = one week back, etc.
 let lastHistory = null;
 let lastTokenHistory = null;
 let currentSettings = {};
-let statsSortCol = "totalTokens";
-let statsSortDir = -1;
 let projectDetailState = { cwd: null, range: "30d", offset: 0 };
 
 // ── Chart rendering ───────────────────────────────────────────────────────────
@@ -190,6 +199,12 @@ function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
     .map((r) => ({ t: hourToMs(r.hour), s: r.session_pct, w: r.weekly_pct }))
     .filter((p) => p.t >= minT && p.t <= maxT);
 
+  // Extend line to the left edge: if the first data point is after window start,
+  // insert a 0% anchor at the window start (session was idle before first record).
+  if (pts.length && pts[0].t > minT) {
+    pts.unshift({ t: minT, s: 0, w: 0 });
+  }
+
   function makeLine(key, color, id) {
     const f = pts.filter((p) => p[key] !== null && p[key] !== undefined);
     if (f.length === 0) return `<g id="${id}"></g>`;
@@ -235,15 +250,154 @@ function setupLegendToggles() {
 // ── Stats rendering ───────────────────────────────────────────────────────────
 const statsContent = document.getElementById("stats-content");
 
+/** Re-render the main dashboard and wire all interactive elements. */
+function refreshDashboard() {
+  if (!lastHistory) return;
+  renderHistory(lastHistory);
+  wireProjectListClicks(statsContent, refreshDashboard);
+}
+
 function setupPaginationButtons() {
   const prevSession = document.getElementById("prev-session");
   const nextSession = document.getElementById("next-session");
   const prevWeekly = document.getElementById("prev-weekly");
   const nextWeekly = document.getElementById("next-weekly");
-  if (prevSession) prevSession.onclick = () => { sessionPageOffset++; renderHistory(lastHistory); };
-  if (nextSession) nextSession.onclick = () => { sessionPageOffset = Math.max(0, sessionPageOffset - 1); renderHistory(lastHistory); };
-  if (prevWeekly) prevWeekly.onclick = () => { weeklyPageOffset++; renderHistory(lastHistory); };
-  if (nextWeekly) nextWeekly.onclick = () => { weeklyPageOffset = Math.max(0, weeklyPageOffset - 1); renderHistory(lastHistory); };
+  if (prevSession) prevSession.onclick = () => { sessionPageOffset++; refreshDashboard(); };
+  if (nextSession) nextSession.onclick = () => { sessionPageOffset = Math.max(0, sessionPageOffset - 1); refreshDashboard(); };
+  if (prevWeekly) prevWeekly.onclick = () => { weeklyPageOffset++; refreshDashboard(); };
+  if (nextWeekly) nextWeekly.onclick = () => { weeklyPageOffset = Math.max(0, weeklyPageOffset - 1); refreshDashboard(); };
+}
+
+// Store configs so the detail view can re-render the same graph with full project list
+const graphDetailConfigs = {};
+
+/**
+ * Reusable graph card: chart + pagination + legend + project list.
+ * @param {object} opts
+ * @param {string} opts.id         - Unique key ("session" or "weekly")
+ * @param {object[]} opts.history  - Usage history records
+ * @param {number} opts.startMs    - Window start
+ * @param {number} opts.endMs      - Window end
+ * @param {string} opts.lineKey    - "s" or "w"
+ * @param {string} opts.pctKey     - "s" or "w" for session/weekly pct attribution
+ * @param {number} opts.pageOffset
+ * @param {boolean} opts.hasPrev
+ * @param {string} opts.prevId     - DOM id for prev button
+ * @param {string} opts.nextId     - DOM id for next button
+ * @param {string} opts.pageLabel  - e.g. "This session", "1 session ago"
+ * @param {string[]} opts.legends  - Legend HTML items
+ * @param {number|null} opts.maxItems - Max projects to show (null = unlimited)
+ * @returns {string} HTML
+ */
+function buildGraphCard(opts) {
+  const { id, history, startMs, endMs, lineKey, pctKey, pageOffset, hasPrev, prevId, nextId, pageLabel, legends, maxItems } = opts;
+  const svgId = `chart-${id}`;
+  const projectListId = `window-${id}-${startMs}`;
+
+  // Save config for detail view
+  graphDetailConfigs[projectListId] = opts;
+
+  return `<div class="chart-container"${id === "session" ? ' style="margin-bottom:12px"' : ""}>
+    <div class="chart-pagination">
+      <button id="${prevId}" class="btn-secondary" ${hasPrev ? "" : "disabled"}>◀</button>
+      <span class="chart-pagination-label">${pageLabel}</span>
+      <button id="${nextId}" class="btn-secondary" ${pageOffset === 0 ? "disabled" : ""}>▶</button>
+    </div>
+    <div class="chart-legend">
+      ${legends.join("")}
+    </div>
+    ${buildChart(history, startMs, endMs, lineKey, svgId)}
+    ${buildWindowProjectsHTML(startMs, endMs, history, pctKey, maxItems, projectListId)}
+  </div>`;
+}
+
+/** Open the graph detail view for a given project list. */
+function openGraphDetail(listId) {
+  const config = graphDetailConfigs[listId];
+  if (!config) return;
+
+  const container = document.getElementById("graph-detail-content");
+  const title = document.getElementById("graphDetailTitle");
+  if (!container) return;
+
+  title.textContent = config.id === "session" ? "Session" : "Weekly";
+
+  // Re-render the same card but with no maxItems cap
+  container.innerHTML = buildGraphCard({ ...config, maxItems: null });
+
+  // Wire up pagination within the detail view
+  const prevBtn = container.querySelector(`#${config.prevId}`);
+  const nextBtn = container.querySelector(`#${config.nextId}`);
+  if (config.id === "session") {
+    if (prevBtn) prevBtn.onclick = () => { sessionPageOffset++; renderGraphDetailFromCurrent("session"); };
+    if (nextBtn) nextBtn.onclick = () => { sessionPageOffset = Math.max(0, sessionPageOffset - 1); renderGraphDetailFromCurrent("session"); };
+  } else {
+    if (prevBtn) prevBtn.onclick = () => { weeklyPageOffset++; renderGraphDetailFromCurrent("weekly"); };
+    if (nextBtn) nextBtn.onclick = () => { weeklyPageOffset = Math.max(0, weeklyPageOffset - 1); renderGraphDetailFromCurrent("weekly"); };
+  }
+
+  wireProjectListClicks(container, refreshDashboard);
+  showView("graph-detail");
+}
+
+/** Re-render the graph detail after pagination change, recomputing window bounds. */
+function renderGraphDetailFromCurrent(type) {
+  if (!lastHistory || !lastHistory.length) return;
+  const latest = lastHistory[lastHistory.length - 1];
+  const SESSION_MS = 5 * 3_600_000;
+  const WEEK_MS = 7 * 24 * 3_600_000;
+
+  const legendItem = (elId, color, isDashed, label) => {
+    const dot = isDashed
+      ? `<span style="display:inline-block;width:14px;height:2px;background:${color};vertical-align:middle;margin-right:4px;border-radius:1px;border-top:2px dashed ${color};"></span>`
+      : `<span class="legend-dot" style="background:${color}"></span>`;
+    return `<span id="${elId}" style="cursor:pointer">${dot}${label}</span>`;
+  };
+
+  let config;
+  if (type === "session") {
+    const sessionEndMs = latest.session_resets_at ? new Date(latest.session_resets_at).getTime() : Date.now() + 3_600_000;
+    const shiftMs = sessionPageOffset * SESSION_MS;
+    const startMs = sessionEndMs - SESSION_MS - shiftMs;
+    const endMs = sessionEndMs - shiftMs;
+    const hasPrev = lastHistory.some((r) => { const t = hourToMs(r.hour); return t >= startMs - SESSION_MS && t < startMs; });
+    config = {
+      id: "session", history: lastHistory, startMs, endMs, lineKey: "s", pctKey: "s",
+      pageOffset: sessionPageOffset, hasPrev, prevId: "prev-session", nextId: "next-session",
+      pageLabel: sessionPageOffset === 0 ? "This session" : `${sessionPageOffset} session${sessionPageOffset > 1 ? "s" : ""} ago`,
+      legends: [legendItem("legend-session", "#9d7dfc", false, "Session")],
+      maxItems: null,
+    };
+  } else {
+    const weeklyEndMs = latest.weekly_resets_at ? new Date(latest.weekly_resets_at).getTime() : Date.now() + 3_600_000;
+    const weeklyStartMs = weeklyEndMs - WEEK_MS;
+    const shiftMs = weeklyPageOffset * WEEK_MS;
+    const startMs = weeklyStartMs - shiftMs;
+    const endMs = weeklyEndMs - shiftMs;
+    const hasPrev = lastHistory.some((r) => { const t = hourToMs(r.hour); return t >= startMs - WEEK_MS && t < startMs; });
+    config = {
+      id: "weekly", history: lastHistory, startMs, endMs, lineKey: "w", pctKey: "w",
+      pageOffset: weeklyPageOffset, hasPrev, prevId: "prev-weekly", nextId: "next-weekly",
+      pageLabel: weeklyPageOffset === 0 ? "This week" : `${weeklyPageOffset}w ago`,
+      legends: [legendItem("legend-weekly", "#6e8fff", false, "Weekly"), legendItem("legend-expected", "#6b6990", true, "Expected")],
+      maxItems: null,
+    };
+  }
+
+  const container = document.getElementById("graph-detail-content");
+  container.innerHTML = buildGraphCard(config);
+
+  const prevBtn = container.querySelector(`#${config.prevId}`);
+  const nextBtn = container.querySelector(`#${config.nextId}`);
+  if (type === "session") {
+    if (prevBtn) prevBtn.onclick = () => { sessionPageOffset++; renderGraphDetailFromCurrent("session"); };
+    if (nextBtn) nextBtn.onclick = () => { sessionPageOffset = Math.max(0, sessionPageOffset - 1); renderGraphDetailFromCurrent("session"); };
+  } else {
+    if (prevBtn) prevBtn.onclick = () => { weeklyPageOffset++; renderGraphDetailFromCurrent("weekly"); };
+    if (nextBtn) nextBtn.onclick = () => { weeklyPageOffset = Math.max(0, weeklyPageOffset - 1); renderGraphDetailFromCurrent("weekly"); };
+  }
+
+  wireProjectListClicks(container, refreshDashboard);
 }
 
 function renderHistory(history) {
@@ -337,31 +491,36 @@ function renderHistory(history) {
       </div>
     </div>
     ${buildTodaySectionHTML(lastTokenHistory)}
-    ${showSessionGraph ? `
-    <div class="chart-container" style="margin-bottom: 12px;">
-      <div class="chart-pagination">
-        <button id="prev-session" class="btn-secondary" ${hasSessionPrev ? "" : "disabled"}>◀</button>
-        <span class="chart-pagination-label">${sessionPageOffset === 0 ? "This session" : `${sessionPageOffset} session${sessionPageOffset > 1 ? "s" : ""} ago`}</span>
-        <button id="next-session" class="btn-secondary" ${sessionPageOffset === 0 ? "disabled" : ""}>▶</button>
-      </div>
-      <div class="chart-legend">
-        ${legendItem("legend-session", "#9d7dfc", false, "Session")}
-      </div>
-      ${buildChart(history, shiftedSessionStartMs, shiftedSessionEndMs, "s", "chart-session")}
-    </div>` : ""}
-    ${showWeeklyGraph ? `
-    <div class="chart-container">
-      <div class="chart-pagination">
-        <button id="prev-weekly" class="btn-secondary" ${hasWeeklyPrev ? "" : "disabled"}>◀</button>
-        <span class="chart-pagination-label">${weeklyPageOffset === 0 ? "This week" : `${weeklyPageOffset}w ago`}</span>
-        <button id="next-weekly" class="btn-secondary" ${weeklyPageOffset === 0 ? "disabled" : ""}>▶</button>
-      </div>
-      <div class="chart-legend">
-        ${legendItem("legend-weekly",   "#6e8fff", false, "Weekly")}
-        ${legendItem("legend-expected", "#6b6990", true,  "Expected")}
-      </div>
-      ${buildChart(history, shiftedWeeklyStartMs, shiftedWeeklyEndMs, "w", "chart-weekly")}
-    </div>` : ""}
+    ${showSessionGraph ? buildGraphCard({
+      id: "session",
+      history,
+      startMs: shiftedSessionStartMs,
+      endMs: shiftedSessionEndMs,
+      lineKey: "s",
+      pctKey: "s",
+      pageOffset: sessionPageOffset,
+      hasPrev: hasSessionPrev,
+      prevId: "prev-session",
+      nextId: "next-session",
+      pageLabel: sessionPageOffset === 0 ? "This session" : `${sessionPageOffset} session${sessionPageOffset > 1 ? "s" : ""} ago`,
+      legends: [legendItem("legend-session", "#9d7dfc", false, "Session")],
+      maxItems: 5,
+    }) : ""}
+    ${showWeeklyGraph ? buildGraphCard({
+      id: "weekly",
+      history,
+      startMs: shiftedWeeklyStartMs,
+      endMs: shiftedWeeklyEndMs,
+      lineKey: "w",
+      pctKey: "w",
+      pageOffset: weeklyPageOffset,
+      hasPrev: hasWeeklyPrev,
+      prevId: "prev-weekly",
+      nextId: "next-weekly",
+      pageLabel: weeklyPageOffset === 0 ? "This week" : `${weeklyPageOffset}w ago`,
+      legends: [legendItem("legend-weekly", "#6e8fff", false, "Weekly"), legendItem("legend-expected", "#6b6990", true, "Expected")],
+      maxItems: 5,
+    }) : ""}
   `;
 
   setupLegendToggles();
@@ -369,17 +528,38 @@ function renderHistory(history) {
   setupPaginationButtons();
 }
 
-window.electronAPI?.getUsageHistory().then(renderHistory);
+// Merge active (live) sessions into token history so project lists show ongoing work.
+async function fetchTokenHistoryWithLive() {
+  const history = await window.electronAPI?.getTokenHistory() || [];
+  try {
+    const active = await window.electronAPI?.getActiveSessions() || [];
+    if (active.length) return [...history, ...active];
+  } catch { /* handler may not be registered yet */ }
+  return history;
+}
+
+// Gate initial render: only render once usage history, token history, AND settings are loaded.
+let _initUsage = null;
+let _initTokens = null;
+let _initSettings = false;
+function tryInitialRender() {
+  if (_initUsage && _initTokens && _initSettings) refreshDashboard();
+}
+window.electronAPI?.getUsageHistory().then((h) => { _initUsage = h; lastHistory = h; tryInitialRender(); });
+fetchTokenHistoryWithLive().then((th) => { _initTokens = th; lastTokenHistory = th; tryInitialRender(); });
+window.electronAPI?.getSettings().then((s) => { if (s) currentSettings = s; _initSettings = true; tryInitialRender(); });
+
 window.electronAPI?.onHistoryUpdated((h) => {
-  renderHistory(h);
+  lastHistory = h;
+  refreshDashboard();
   if (activeView === "stats") renderStats(lastTokenHistory);
 });
-
-window.electronAPI?.getTokenHistory().then((th) => { lastTokenHistory = th; });
-window.electronAPI?.onTokenHistoryUpdated((th) => {
-  lastTokenHistory = th;
-  if (lastHistory) renderHistory(lastHistory);
-  if (activeView === "stats") renderStats(th);
+window.electronAPI?.onTokenHistoryUpdated(async (th) => {
+  let active = [];
+  try { active = await window.electronAPI?.getActiveSessions() || []; } catch { /* ignore */ }
+  lastTokenHistory = active.length ? [...(th || []), ...active] : (th || []);
+  refreshDashboard();
+  if (activeView === "stats") renderStats(lastTokenHistory);
   if (activeView === "stats-project") renderProjectDetail();
 });
 
@@ -429,9 +609,134 @@ function aggregateByProject(tokenHistory) {
     p.cacheReadTokens += r.cacheReadTokens || 0;
     p.cacheCreationTokens += r.cacheCreationTokens || 0;
     p.turns += r.turns || 0;
-    if ((r.date || "") > p.lastDate) p.lastDate = r.date || "";
+    const ts = r.lastActiveAt || r.recordedAt || r.date || "";
+    if (ts > p.lastDate) p.lastDate = ts;
   }
   return Array.from(map.values());
+}
+
+// ── Reusable project list component ────────────────────────────────────────────
+
+// Per-list sort state, keyed by list id
+const listSortState = {};
+
+/**
+ * Renders a project list as a stats-table (same look as Token Stats page).
+ *
+ * @param {object}   opts
+ * @param {string}   opts.title       - Section heading
+ * @param {object[]} opts.projects    - Array of { cwd, tokens, lastActiveAt, sessionPct? }
+ * @param {number}  [opts.maxItems]   - Cap visible rows; shows "Show all" button if exceeded
+ * @param {boolean} [opts.showTime]   - Show the "Last active" column (default true)
+ * @param {boolean} [opts.showPct]    - Show the "Session %" column (default false)
+ * @param {boolean} [opts.sortable]   - Show sortable column headers (default false)
+ * @param {string}  [opts.defaultSort] - Default sort column key (default "lastActiveAt")
+ * @param {string}  [opts.id]         - Unique id for the list (required if sortable)
+ * @param {string}  [opts.style]      - Extra inline style on wrapper div
+ * @returns {string} HTML string
+ */
+function buildProjectListHTML({ title, projects, maxItems, showTime = true, showPct = false, sortable = false, defaultSort = "lastActiveAt", id, style }) {
+  if (!projects || !projects.length) return "";
+
+  const containerId = id || `plist-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Init sort state for this list if needed
+  if (!listSortState[containerId]) {
+    listSortState[containerId] = { col: defaultSort, dir: -1 };
+  }
+  const ss = listSortState[containerId];
+
+  // Build column definitions based on flags
+  const cols = [{ key: "project", label: "Project" }];
+  cols.push({ key: "tokens", label: "Total" });
+  if (showPct) cols.push({ key: "sessionPct", label: "Session %" });
+  if (showTime) cols.push({ key: "lastActiveAt", label: "Last active" });
+
+  // Sort
+  function sortVal(p, col) {
+    if (col === "project") return projectLabel(p.cwd).toLowerCase();
+    if (col === "tokens") return p.tokens || 0;
+    if (col === "sessionPct") return p.sessionPct ?? -1;
+    if (col === "lastActiveAt") return p.lastActiveAt || "";
+    return 0;
+  }
+  const sorted = [...projects].sort((a, b) => {
+    const av = sortVal(a, ss.col);
+    const bv = sortVal(b, ss.col);
+    return (av < bv ? -1 : av > bv ? 1 : 0) * ss.dir;
+  });
+
+  const capped = maxItems && sorted.length > maxItems;
+  const visible = capped ? sorted.slice(0, maxItems) : sorted;
+
+  // Headers
+  let headerRow = "";
+  if (sortable) {
+    headerRow = "<thead><tr>" + cols.map((c) => {
+      const arrow = ss.col === c.key ? (ss.dir === -1 ? " ↓" : " ↑") : "";
+      const cls = ss.col === c.key ? " sort-active" : "";
+      return `<th class="${cls}" data-sort="${c.key}" data-list="${containerId}">${c.label}${arrow}</th>`;
+    }).join("") + "</tr></thead>";
+  }
+
+  const renderRow = (p) => `<tr class="proj-row" data-cwd="${p.cwd}">
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${projectLabel(p.cwd)}</td>
+      <td class="mono">${fmtK(p.tokens)}</td>
+      ${showPct ? `<td class="mono">${p.sessionPct != null ? p.sessionPct + "%" : "—"}</td>` : ""}
+      ${showTime ? `<td class="mono">${timeAgo(p.lastActiveAt)}</td>` : ""}
+    </tr>`;
+
+  const visibleRows = visible.map(renderRow).join("");
+  const hiddenRows = capped ? sorted.slice(maxItems).map(renderRow).join("") : "";
+
+  const remaining = sorted.length - visible.length;
+  const showMoreBtn = capped
+    ? `<tfoot><tr><td colspan="${cols.length}" style="text-align:center;padding-top:6px;border-bottom:none">
+         <button class="btn-secondary show-more-btn" data-list-id="${containerId}" style="font-size:0.72rem;padding:2px 10px">Show ${remaining} more</button>
+       </td></tr></tfoot>`
+    : "";
+
+  return `<div class="today-section" ${style ? `style="${style}"` : ""}>
+    ${title ? `<div style="font-size:0.92rem;font-weight:700;margin-bottom:10px">${title}</div>` : ""}
+    <table class="stats-table">
+      ${headerRow}
+      <tbody>${visibleRows}</tbody>
+      ${showMoreBtn}
+    </table>
+  </div>`;
+}
+
+/** Wire click handlers for project list rows, show-all buttons, and sort headers. */
+function wireProjectListClicks(container, onSort) {
+  if (!container) return;
+  container.querySelectorAll(".proj-row").forEach((row) => {
+    if (row.dataset.cwd && !row._wired) {
+      row._wired = true;
+      row.onclick = () => openProjectDetail(row.dataset.cwd);
+    }
+  });
+  container.querySelectorAll(".show-more-btn").forEach((btn) => {
+    if (btn._wired) return;
+    btn._wired = true;
+    btn.onclick = () => {
+      const listId = btn.dataset.listId;
+      if (listId && graphDetailConfigs[listId]) {
+        openGraphDetail(listId);
+      }
+    };
+  });
+  container.querySelectorAll("th[data-sort][data-list]").forEach((th) => {
+    if (th._wired) return;
+    th._wired = true;
+    th.onclick = () => {
+      const listId = th.dataset.list;
+      const col = th.dataset.sort;
+      const ss = listSortState[listId];
+      if (!ss) return;
+      ss.col === col ? (ss.dir *= -1) : (ss.col = col, ss.dir = -1);
+      if (onSort) onSort(listId);
+    };
+  });
 }
 
 // ── Today summary ──────────────────────────────────────────────────────────────
@@ -444,27 +749,120 @@ function buildTodaySectionHTML(tokenHistory) {
   const byProject = new Map();
   for (const r of todayRecords) {
     const key = r.cwd || "(unknown)";
-    if (!byProject.has(key)) byProject.set(key, { cwd: key, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });
+    if (!byProject.has(key)) byProject.set(key, { cwd: key, tokens: 0, lastActiveAt: "" });
     const p = byProject.get(key);
-    p.inputTokens += r.inputTokens || 0;
-    p.outputTokens += r.outputTokens || 0;
-    p.cacheReadTokens += r.cacheReadTokens || 0;
-    p.cacheCreationTokens += r.cacheCreationTokens || 0;
+    p.tokens += totalTok(r);
+    const ts = r.lastActiveAt || r.recordedAt || r.date || "";
+    if (ts > p.lastActiveAt) p.lastActiveAt = ts;
   }
 
-  const rows = Array.from(byProject.values()).map((p) => {
-    const tot = totalTok(p);
-    const eff = cacheEffPct(p);
-    return `<div class="today-row">
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%">${projectLabel(p.cwd)}</span>
-      <span style="font-family:'Fira Code',monospace;font-size:0.78rem;color:var(--text-dim)">${fmtK(tot)} tok${eff > 0 ? ` · ${eff}% cache` : ""}</span>
-    </div>`;
-  }).join("");
+  return buildProjectListHTML({
+    title: "Today",
+    projects: Array.from(byProject.values()),
+    sortable: true,
+    defaultSort: "lastActiveAt",
+    id: "today-projects",
+  });
+}
 
-  return `<div class="today-section">
-    <div class="stat-label" style="margin-bottom:8px">Today</div>
-    ${rows}
-  </div>`;
+/**
+ * Build HTML listing projects active during a given time window.
+ * Uses overlap check: session overlaps [startMs, endMs] if it started before the
+ * window ends AND was last active after the window starts.
+ *
+ * @param {number}   startMs        - Window start (epoch ms)
+ * @param {number}   endMs          - Window end (epoch ms)
+ * @param {object[]} [usageHistory] - Usage history records
+ * @param {string}   [pctKey="s"]   - "s" for session_pct, "w" for weekly_pct
+ */
+function buildWindowProjectsHTML(startMs, endMs, usageHistory, pctKey = "s", maxItems = 5, listId = null) {
+  if (!lastTokenHistory || !lastTokenHistory.length) return "";
+
+  const byProject = new Map();
+  for (const r of lastTokenHistory) {
+    const endTs = r.lastActiveAt || "";
+    const startTs = r.startedAt || "";
+    if (!endTs) continue;
+
+    const sessionEndMs = new Date(endTs).getTime();
+    if (isNaN(sessionEndMs)) continue;
+
+    if (startTs) {
+      const sessionStartMs = new Date(startTs).getTime();
+      if (isNaN(sessionStartMs)) continue;
+      if (sessionStartMs >= endMs || sessionEndMs <= startMs) continue;
+    } else {
+      if (sessionEndMs < startMs || sessionEndMs > endMs) continue;
+    }
+
+    const key = r.cwd || "(unknown)";
+    if (!byProject.has(key)) byProject.set(key, { cwd: key, tokens: 0, lastActiveAt: "" });
+    const p = byProject.get(key);
+    p.tokens += totalTok(r);
+    if (endTs > p.lastActiveAt) p.lastActiveAt = endTs;
+  }
+
+  // Compute session % attribution from usage history delta
+  const projects = Array.from(byProject.values());
+  let hasPct = false;
+  if (usageHistory && usageHistory.length && projects.length) {
+    const pctField = pctKey === "w" ? "weekly_pct" : "session_pct";
+    const windowPts = usageHistory
+      .filter((r) => r[pctField] != null)
+      .map((r) => ({ t: hourToMs(r.hour), pct: r[pctField] }))
+      .filter((p) => p.t >= startMs && p.t <= endMs)
+      .sort((a, b) => a.t - b.t);
+
+    if (windowPts.length >= 2) {
+      const delta = windowPts[windowPts.length - 1].pct - windowPts[0].pct;
+      if (delta > 0) {
+        const totalTokens = projects.reduce((s, p) => s + p.tokens, 0);
+        if (totalTokens > 0) {
+          hasPct = true;
+          for (const p of projects) {
+            p.sessionPct = Math.round((p.tokens / totalTokens) * delta);
+          }
+        }
+      }
+    }
+  }
+
+  return buildProjectListHTML({
+    title: "Worked on",
+    projects,
+    maxItems: maxItems,
+    showTime: false,
+    showPct: hasPct,
+    sortable: true,
+    defaultSort: hasPct ? "sessionPct" : "tokens",
+    id: listId || `window-${startMs}`,
+    style: "margin-top:2px;margin-bottom:8px",
+  });
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "—";
+  const now = Date.now();
+  // Support "YYYY-MM-DDTHH" or "YYYY-MM-DDTHH:MM" by converting to local time
+  let then;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}(:\d{2})?$/.test(dateStr)) {
+    then = hourToMs(dateStr);
+  } else {
+    then = new Date(dateStr).getTime();
+  }
+  if (isNaN(then)) return "—";
+  const diffMs = now - then;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
 }
 
 // ── Stats view ─────────────────────────────────────────────────────────────────
@@ -478,74 +876,21 @@ function renderStats(tokenHistory) {
     return;
   }
 
-  const projects = aggregateByProject(tokenHistory);
-  const grandTotal = projects.reduce((s, p) => s + totalTok(p), 0);
+  const projects = aggregateByProject(tokenHistory).map((p) => ({
+    cwd: p.cwd,
+    tokens: totalTok(p),
+    lastActiveAt: p.lastDate,
+  }));
 
-  const colDefs = [
-    { key: "project", label: "Project", sortable: false },
-    { key: "sessions", label: "Sess", sortable: true },
-    { key: "avg", label: "Avg/sess", sortable: true },
-    { key: "totalTokens", label: "Total", sortable: true },
-    { key: "pct", label: "% of all", sortable: true },
-    { key: "lastDate", label: "Last active", sortable: true },
-  ];
-
-  function sortVal(p, col) {
-    if (col === "sessions") return p.sessions;
-    if (col === "avg") return p.sessions ? Math.round(totalTok(p) / p.sessions) : 0;
-    if (col === "totalTokens") return totalTok(p);
-    if (col === "pct") return grandTotal ? totalTok(p) / grandTotal : 0;
-    if (col === "lastDate") return p.lastDate;
-    return 0;
-  }
-
-  const sorted = [...projects].sort((a, b) => {
-    const av = sortVal(a, statsSortCol);
-    const bv = sortVal(b, statsSortCol);
-    return (av < bv ? -1 : av > bv ? 1 : 0) * statsSortDir;
+  container.innerHTML = buildProjectListHTML({
+    title: "",
+    projects,
+    sortable: true,
+    defaultSort: "lastActiveAt",
+    id: "stats-main",
   });
 
-  const headers = colDefs.map((c) => {
-    if (!c.sortable) return `<th>${c.label}</th>`;
-    const arrow = statsSortCol === c.key ? (statsSortDir === -1 ? " ↓" : " ↑") : "";
-    const cls = statsSortCol === c.key ? " sort-active" : "";
-    return `<th class="${cls}" data-sort="${c.key}">${c.label}${arrow}</th>`;
-  }).join("");
-
-  const rows = sorted.map((p) => {
-    const tot = totalTok(p);
-    const avg = p.sessions ? Math.round(tot / p.sessions) : 0;
-    const pct = grandTotal ? Math.round(tot / grandTotal * 100) : 0;
-    return `<tr class="proj-row" data-cwd="${p.cwd}">
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${projectLabel(p.cwd)}</td>
-      <td class="mono">${p.sessions}</td>
-      <td class="mono">${fmtK(avg)}</td>
-      <td class="mono">${fmtK(tot)}</td>
-      <td class="mono">${pct}%</td>
-      <td class="mono">${p.lastDate || "—"}</td>
-    </tr>`;
-  }).join("");
-
-  container.innerHTML = `
-    <div class="section" style="padding:12px 14px;overflow-x:auto">
-      <table class="stats-table">
-        <thead><tr>${headers}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-
-  container.querySelectorAll("th[data-sort]").forEach((th) => {
-    th.onclick = () => {
-      const col = th.dataset.sort;
-      statsSortCol === col ? (statsSortDir *= -1) : (statsSortCol = col, statsSortDir = -1);
-      renderStats(lastTokenHistory);
-    };
-  });
-
-  container.querySelectorAll(".proj-row").forEach((row) => {
-    row.onclick = () => openProjectDetail(row.dataset.cwd);
-  });
-
+  wireProjectListClicks(container, () => renderStats(lastTokenHistory));
   setupBackfillBtn();
 }
 
