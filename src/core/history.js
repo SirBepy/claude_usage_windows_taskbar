@@ -7,7 +7,8 @@ const path = require("path");
 const HISTORY_PATH = path.join(app.getPath("userData"), "usage-history.json");
 
 /**
- * Returns the local-time hour bucket key for the current moment: "YYYY-MM-DDTHH"
+ * Returns the local-time bucket key for the current moment: "YYYY-MM-DDTHH:MM"
+ * Minutes are floored to the nearest 10-minute interval (00, 10, 20, 30, 40, 50).
  */
 function currentHourKey() {
   const now = new Date();
@@ -16,7 +17,8 @@ function currentHourKey() {
   const month = pad(now.getMonth() + 1);
   const day = pad(now.getDate());
   const hour = pad(now.getHours());
-  return `${year}-${month}-${day}T${hour}`;
+  const min = pad(Math.floor(now.getMinutes() / 10) * 10);
+  return `${year}-${month}-${day}T${hour}:${min}`;
 }
 
 /**
@@ -44,7 +46,8 @@ function retainedDays() {
  * Read and parse usage-history.json. Returns [] on missing file, empty file,
  * or invalid JSON — never throws.
  *
- * Hardens records: keeps only objects with a string `hour` matching "YYYY-MM-DDTHH".
+ * Hardens records: keeps only objects with a string `hour` matching
+ * "YYYY-MM-DDTHH" (legacy) or "YYYY-MM-DDTHH:MM" (10-min buckets).
  */
 function loadHistory() {
   try {
@@ -60,7 +63,7 @@ function loadHistory() {
         r &&
         typeof r === "object" &&
         typeof r.hour === "string" &&
-        /^\d{4}-\d{2}-\d{2}T\d{2}$/.test(r.hour)
+        /^\d{4}-\d{2}-\d{2}T\d{2}(:\d{2})?$/.test(r.hour)
       );
     });
   } catch (e) {
