@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   checkForUpdates: () => ipcRenderer.send("check-for-updates"),
   copyLogs: () => ipcRenderer.send("copy-logs"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  getPlatform: () => ipcRenderer.invoke("get-platform"),
+  openExternal: (url) => ipcRenderer.send("open-external", url),
 
   onUpdateStateChange: (cb) => {
     const handler = (_, data) => cb(data);

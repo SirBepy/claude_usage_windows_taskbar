@@ -528,6 +528,8 @@ ipcMain.on("copy-logs", () => {
   clipboard.writeText(logBuffer.join("\n"));
 });
 ipcMain.handle("get-app-version", () => app.getVersion());
+ipcMain.handle("get-platform", () => process.platform);
+ipcMain.on("open-external", (_, url) => shell.openExternal(url));
 ipcMain.handle("get-token-history", () => loadTokenHistory());
 ipcMain.handle("get-active-sessions", () => getActiveSessions());
 ipcMain.handle("backfill-transcripts", () => backfillAllTranscripts());
