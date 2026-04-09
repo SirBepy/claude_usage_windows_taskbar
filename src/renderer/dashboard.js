@@ -220,7 +220,7 @@ function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
     gridLines +
     `<line x1="${ML}" x2="${ML}" y1="${MT}" y2="${MT + PH}" stroke="#2d2c44" stroke-width="1"/>` +
     tickItems.join("") +
-    (lineKey === "w" ? refLine : "") +
+    refLine +
     (lineKey === "s" ? makeLine("s", "#9d7dfc", "line-session") : makeLine("w", "#6e8fff", "line-weekly")) +
     `</svg>`
   );
@@ -365,7 +365,7 @@ function renderGraphDetailFromCurrent(type) {
       id: "session", history: lastHistory, startMs, endMs, lineKey: "s", pctKey: "s",
       pageOffset: sessionPageOffset, hasPrev, prevId: "prev-session", nextId: "next-session",
       pageLabel: sessionPageOffset === 0 ? "This session" : `${sessionPageOffset} session${sessionPageOffset > 1 ? "s" : ""} ago`,
-      legends: [legendItem("legend-session", "#9d7dfc", false, "Session")],
+      legends: [legendItem("legend-session", "#9d7dfc", false, "Session"), legendItem("legend-expected", "#6b6990", true, "Expected")],
       maxItems: null,
     };
   } else {
@@ -503,7 +503,7 @@ function renderHistory(history) {
       prevId: "prev-session",
       nextId: "next-session",
       pageLabel: sessionPageOffset === 0 ? "This session" : `${sessionPageOffset} session${sessionPageOffset > 1 ? "s" : ""} ago`,
-      legends: [legendItem("legend-session", "#9d7dfc", false, "Session")],
+      legends: [legendItem("legend-session", "#9d7dfc", false, "Session"), legendItem("legend-expected", "#6b6990", true, "Expected")],
       maxItems: 5,
     }) : ""}
     ${showWeeklyGraph ? buildGraphCard({

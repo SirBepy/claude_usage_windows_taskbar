@@ -1,6 +1,6 @@
 # TODOs
 
-<\!-- last-id: 18 -->
+<\!-- last-id: 20 -->
 
 ## [T-017] Chart/bar graph toggle per usage graph
 **Status:** planned
@@ -26,18 +26,27 @@
 
 ---
 
-## [T-018] Expected line in 5-hour session graph
-**Status:** planned
-**Added:** 2026-04-08
-**Description:** Add the "expected" pace line to the 5-hour session graphs, matching the existing pace line on the 7-day graph.
+## [T-019] Fix sound not firing for AskUserQuestion
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Sound notification does not play when AskUserQuestion is fired. Need to investigate why the sound hook is not triggering and fix it.
 **Questions:**
-- [x] Same style as weekly pace line? "Yes, identical dashed gray diagonal, same toggling behavior"
+_(none)_
 
 **Plan:**
-1. In `buildChart()` in `dashboard.js`, remove the `lineKey === "w"` guard on the expected pace line rendering (~line 223) so the diagonal `refLine` also renders for `lineKey === "s"` (session graphs)
-2. Add an "Expected" legend entry to the session graph legend (matching the weekly graph's existing legend entry)
-3. Wire the same legend click toggle behavior for the session expected line
-4. Verify the diagonal goes from (windowStart, 0%) to (windowEnd, 100%) correctly for 5-hour windows
+_(empty)_
+
+---
+
+## [T-020] Don't log out on network drop
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** When WiFi drops temporarily (common on macOS), the app treats it as an expired session and logs the user out, forcing re-authentication. The app should tolerate transient network failures and only log out on a genuine auth expiry, not a connectivity blip.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
 
 ---
 
