@@ -42,9 +42,17 @@ function fetchUsageFromPage() {
       20000,
     );
 
+    // Catch network failures (WiFi drops, DNS errors) before the 20s timeout.
+    win.webContents.on("did-fail-load", (_, code, desc) => {
+      console.log(`[scraper] did-fail-load: ${code} ${desc}`);
+      settle(() => reject(new Error(`Network error: ${desc}`)));
+    });
+
     // Log every navigation so we can see the full redirect chain.
     win.webContents.on("did-navigate", (_, url) => {
       console.log(`[scraper] did-navigate → ${url}`);
+      // Ignore chrome-error:// pages from network failures
+      if (/^chrome-error:\/\//i.test(url)) return;
       if (/\/(login|auth|sso)/i.test(url)) {
         console.log("[scraper] detected auth redirect — session invalid");
         settle(() => reject(new Error("HTTP 401")));

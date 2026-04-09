@@ -2,36 +2,6 @@
 
 <!-- last-id: 30 -->
 
-## [T-019] Fix sound not firing for AskUserQuestion
-**Status:** planned
-**Added:** 2026-04-09
-**Description:** Sound notification does not play when AskUserQuestion is fired. Root cause: no Claude Code hook is configured for AskUserQuestion to POST to the toolbar's /notify endpoint.
-**Questions:**
-- [x] Is sound broken for all events or just AskUserQuestion? "Only AskUserQuestion broken, other sounds work"
-- [x] Is the Claude Code hook configured? "No, only a Stop hook exists (POST /refresh). No AskUserQuestion hook."
-- [x] Fix approach? "Add an AskUserQuestion hook in ~/.claude/settings.json that POSTs to http://127.0.0.1:27182/notify"
-
-**Plan:**
-1. Add a `NotifyUser` hook entry in `~/.claude/settings.json` under `hooks` that runs `curl -s -X POST http://127.0.0.1:27182/notify` when AskUserQuestion fires
-2. Verify the /notify endpoint in main.js (lines 63-73) correctly reads `settings.sounds.questionAsked` and calls `playSound()` - already works
-3. Test by triggering AskUserQuestion in Claude Code and confirming the sound plays
-
----
-
-## [T-020] Don't log out on network drop
-**Status:** planned
-**Added:** 2026-04-09
-**Description:** When WiFi drops temporarily (common on macOS), the app shows the login window and clears cookies, forcing re-authentication. The scraper's `did-navigate` handler catches a /login redirect (caused by the network blip) as an auth failure. Should tolerate transient network failures silently and wait for next poll.
-**Questions:**
-- [x] What happens when WiFi drops? "Login window pops up actively"
-- [x] Retry behavior on network error? "Just wait for next poll (10 min), skip silently"
-
-**Plan:**
-1. In `src/core/scraper.js`, add a `did-fail-load` listener on the BrowserWindow that rejects with a distinct `Error("Network error")` (not HTTP 401/403) so network failures are caught before the 20s timeout
-2. In `src/core/scraper.js`, update the `did-navigate` handler to ignore navigation to error/blank pages (e.g. `chrome-error://`) that aren't actual /login redirects
-3. In `main.js` `fetchUsage()` (lines 248-258), keep `handleAuthFailure()` only for errors matching `HTTP 40[13]`. Network errors and timeouts just re-throw as-is, which `refresh()` already catches and logs silently (line 308-310)
-4. Verify that `handleAuthFailure()` (which clears cookies and shows login) is never called for network errors - only for confirmed auth failures
-
 ---
 
 ## [T-021] Extract dashboard CSS into separate file
