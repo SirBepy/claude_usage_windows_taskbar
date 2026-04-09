@@ -21,30 +21,6 @@
 
 ---
 
-## [T-025] Extract dashboard project/stats module
-**Status:** planned
-**Added:** 2026-04-09
-**Description:** Pull project list and stats rendering (~500 lines) out of `dashboard.js` into `src/renderer/modules/stats.js`. Includes: `aggregateByProject`, `buildProjectListHTML`, `wireProjectListClicks`, `buildTodaySectionHTML`, `buildWindowProjectsHTML`, `renderStats`, `openProjectDetail`, `renderProjectDetail`, `buildBarChartSVG`, `renderSessionsList`, `timeAgo`, `setupBackfillBtn`.
-**Questions:**
-- [x] Module loading approach? "Multiple script tags, window globals for shared state"
-- [x] Shared state approach? "Window globals"
-
-**Plan:**
-1. Create `src/renderer/modules/stats.js` containing (from dashboard.js):
-   - Token helpers: `fmtK`, `totalTok`, `cacheEffPct`, `projectLabel`, `isSubagentCwd`, `aggregateByProject` (lines 706-755)
-   - Project list component: `listSortState`, `buildProjectListHTML`, `wireProjectListClicks` (lines 757-880ish)
-   - Window project helpers: `buildTodaySectionHTML`, `buildWindowProjectsHTML`
-   - `timeAgo()` (lines 990-1005)
-   - Stats view: `renderStats`, `setupBackfillBtn` (lines 1007-1060ish)
-   - Project detail: `openProjectDetail`, `renderProjectDetail`, `buildBarChartSVG`, `renderSessionsList` (through line 1224)
-   - `projectDetailState` object
-2. These reference globals: `currentSettings`, `lastTokenHistory`, `activeView`, `showView()`, formatters - all available as window globals
-3. Remove all moved functions from `dashboard.js`
-4. In `dashboard.html`, add `<script src="modules/stats.js"></script>` after formatters.js, before dashboard.js
-5. Verify stats page, project detail, project lists in dashboard, and backfill all work
-
----
-
 ## [T-026] Extract main.js hook server module
 **Status:** planned
 **Added:** 2026-04-09
