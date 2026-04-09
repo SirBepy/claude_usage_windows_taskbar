@@ -238,5 +238,3 @@ window.electronAPI?.onTokenHistoryUpdated(async (th) => {
   if (activeView === "stats") renderStats(lastTokenHistory);
   if (activeView === "stats-project") renderProjectDetail();
 });
-
-

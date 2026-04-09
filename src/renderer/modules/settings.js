@@ -46,6 +46,9 @@ const copyLogsBtn = document.getElementById("copyLogsBtn");
 const appVersionLabel = document.getElementById("appVersionLabel");
 const updateBtn = document.getElementById("updateBtn");
 const updateStateLabel = document.getElementById("updateStateLabel");
+const macUpdateNotice = document.getElementById("macUpdateNotice");
+const macReleasesBtn = document.getElementById("macReleasesBtn");
+let isMac = false;
 
 function saveSettings() {
   const settings = {
@@ -134,6 +137,26 @@ paceColorNearOver.addEventListener("change", saveSettings);
 paceColorOver.addEventListener("change", saveSettings);
 
 function renderUpdateState(updateState) {
+  const hasUpdate = updateState.state === "available" ||
+    updateState.state === "downloaded" ||
+    updateState.state === "downloading" ||
+    updateState.state === "error";
+
+  if (isMac && hasUpdate) {
+    updateStateLabel.innerText = `v${updateState.version} available`;
+    updateStateLabel.style.color = "var(--text)";
+    updateBtn.style.display = "none";
+    macUpdateNotice.style.display = "block";
+    macReleasesBtn.onclick = () => {
+      window.electronAPI?.openExternal(
+        `https://github.com/SirBepy/claude_usage_in_taskbar/releases/tag/v${updateState.version}`
+      );
+    };
+    return;
+  }
+
+  macUpdateNotice.style.display = "none";
+
   if (updateState.state === "downloaded") {
     updateStateLabel.innerText = "Ready to install";
     updateStateLabel.style.color = "var(--primary)";
@@ -171,6 +194,9 @@ function renderUpdateState(updateState) {
 }
 
 window.onload = async () => {
+  const platform = await window.electronAPI?.getPlatform();
+  isMac = platform === "darwin";
+
   const settings = await window.electronAPI?.getSettings();
   if (settings) {
     displayMode.value = settings.displayMode || "both";
