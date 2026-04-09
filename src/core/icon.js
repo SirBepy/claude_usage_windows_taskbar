@@ -1,94 +1,8 @@
 "use strict";
 
 const { nativeImage } = require("electron");
-const zlib = require("zlib");
-
-// ── PNG primitives ────────────────────────────────────────────────────────────
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) {
-    c ^= buf[i];
-    for (let j = 0; j < 8; j++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  }
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function pngChunk(type, data) {
-  const t = Buffer.from(type, "ascii");
-  const len = Buffer.allocUnsafe(4);
-  len.writeUInt32BE(data.length);
-  const crc = Buffer.allocUnsafe(4);
-  crc.writeUInt32BE(crc32(Buffer.concat([t, data])));
-  return Buffer.concat([len, t, data, crc]);
-}
-
-function pixelsToPNG(size, pixels) {
-  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8;
-  ihdr[9] = 6; // 8-bit RGBA
-
-  const rowLen = 1 + size * 4;
-  const raw = Buffer.alloc(size * rowLen, 0);
-  for (let y = 0; y < size; y++) {
-    raw[y * rowLen] = 0; // filter byte
-    for (let x = 0; x < size; x++) {
-      const src = (y * size + x) * 4;
-      const dst = y * rowLen + 1 + x * 4;
-      raw[dst] = pixels[src];
-      raw[dst + 1] = pixels[src + 1];
-      raw[dst + 2] = pixels[src + 2];
-      raw[dst + 3] = pixels[src + 3];
-    }
-  }
-
-  return Buffer.concat([
-    sig,
-    pngChunk("IHDR", ihdr),
-    pngChunk("IDAT", zlib.deflateSync(raw)),
-    pngChunk("IEND", Buffer.alloc(0)),
-  ]);
-}
-
-// ── Rounded rectangle ─────────────────────────────────────────────────────────
-
-/**
- * Fills a rounded rectangle into the pixel buffer.
- * Uses per-pixel distance-to-corner for clean edges at small radii.
- */
-function drawRoundedRect(pixels, x1, y1, x2, y2, r, rgb, alpha) {
-  const [cr, cg, cb] = rgb;
-  // Corner circle centres
-  const corners = [
-    [x1 + r, y1 + r],
-    [x2 - r, y1 + r],
-    [x1 + r, y2 - r],
-    [x2 - r, y2 - r],
-  ];
-  for (let y = y1; y <= y2; y++) {
-    for (let x = x1; x <= x2; x++) {
-      // Determine which region the pixel is in
-      const inCornerZone =
-        (x < x1 + r || x > x2 - r) && (y < y1 + r || y > y2 - r);
-      if (inCornerZone) {
-        // Find the nearest corner centre
-        const cx = x < x1 + r ? x1 + r : x2 - r;
-        const cy = y < y1 + r ? y1 + r : y2 - r;
-        const dx = x - cx,
-          dy = y - cy;
-        if (dx * dx + dy * dy > r * r) continue;
-      }
-      const idx = (y * SIZE + x) * 4;
-      pixels[idx] = cr;
-      pixels[idx + 1] = cg;
-      pixels[idx + 2] = cb;
-      pixels[idx + 3] = alpha;
-    }
-  }
-}
+const { pixelsToPNG, drawRoundedRect } = require("./png-utils");
+const { FONTS, drawText } = require("./fonts");
 
 // ── Ring drawing ──────────────────────────────────────────────────────────────
 
@@ -246,182 +160,6 @@ function drawSpinningArc(
   }
 }
 
-// ── Pixel Fonts (Giant) ────────────────────────────────────────────────────────
-const FONTS = {
-  classic: {
-    width: 9,
-    height: 13,
-    glyphs: {
-      0: [
-        0x1fe, 0x1ff, 0x1e1, 0x1e1, 0x1e1, 0x1e1, 0x1e1, 0x1e1, 0x1e1, 0x1e1,
-        0x1e1, 0x1ff, 0x1fe,
-      ],
-      1: [
-        0x018, 0x018, 0x1f8, 0x1f8, 0x018, 0x018, 0x018, 0x018, 0x018, 0x018,
-        0x018, 0x1fc, 0x1fc,
-      ],
-      2: [
-        0x1fe, 0x1ff, 0x007, 0x007, 0x00f, 0x01f, 0x07e, 0x0f0, 0x1e0, 0x1c0,
-        0x1c0, 0x1ff, 0x1ff,
-      ],
-      3: [
-        0x1fe, 0x1ff, 0x007, 0x007, 0x00f, 0x01e, 0x01e, 0x00f, 0x007, 0x007,
-        0x007, 0x1ff, 0x1fe,
-      ],
-      4: [
-        0x01e, 0x01e, 0x03e, 0x07e, 0x0de, 0x19e, 0x13e, 0x1ff, 0x1ff, 0x01e,
-        0x01e, 0x01e, 0x01e,
-      ],
-      5: [
-        0x1ff, 0x1ff, 0x180, 0x180, 0x1fe, 0x1ff, 0x007, 0x00f, 0x01e, 0x01e,
-        0x007, 0x1ff, 0x1fe,
-      ],
-      6: [
-        0x0fe, 0x1ff, 0x180, 0x180, 0x1fe, 0x1ff, 0x181, 0x181, 0x181, 0x181,
-        0x181, 0x1ff, 0x0fe,
-      ],
-      7: [
-        0x1ff, 0x1ff, 0x007, 0x007, 0x00e, 0x01c, 0x038, 0x070, 0x0e0, 0x1c0,
-        0x1c0, 0x1c0, 0x1c0,
-      ],
-      8: [
-        0x0fe, 0x1ff, 0x181, 0x181, 0x1ff, 0x1ff, 0x181, 0x181, 0x181, 0x181,
-        0x181, 0x1ff, 0x0fe,
-      ],
-      9: [
-        0x0fe, 0x1ff, 0x181, 0x181, 0x181, 0x181, 0x1ff, 0x07f, 0x001, 0x001,
-        0x001, 0x1ff, 0x0fe,
-      ],
-    },
-  },
-  digital: {
-    width: 9,
-    height: 14,
-    glyphs: {
-      0: [
-        0x1ff, 0x1ff, 0x183, 0x183, 0x183, 0x183, 0x183, 0x183, 0x183, 0x183,
-        0x183, 0x1ff, 0x1ff,
-      ],
-      1: [
-        0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003,
-        0x003, 0x003, 0x003,
-      ],
-      2: [
-        0x1ff, 0x1ff, 0x003, 0x003, 0x003, 0x1ff, 0x1ff, 0x180, 0x180, 0x180,
-        0x180, 0x1ff, 0x1ff,
-      ],
-      3: [
-        0x1ff, 0x1ff, 0x003, 0x003, 0x003, 0x1ff, 0x1ff, 0x003, 0x003, 0x003,
-        0x003, 0x1ff, 0x1ff,
-      ],
-      4: [
-        0x183, 0x183, 0x183, 0x183, 0x183, 0x1ff, 0x1ff, 0x003, 0x003, 0x003,
-        0x003, 0x003, 0x003,
-      ],
-      5: [
-        0x1ff, 0x1ff, 0x180, 0x180, 0x180, 0x1ff, 0x1ff, 0x003, 0x003, 0x003,
-        0x003, 0x1ff, 0x1ff,
-      ],
-      6: [
-        0x1ff, 0x1ff, 0x180, 0x180, 0x180, 0x1ff, 0x1ff, 0x183, 0x183, 0x183,
-        0x183, 0x1ff, 0x1ff,
-      ],
-      7: [
-        0x1ff, 0x1ff, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003,
-        0x003, 0x003, 0x003,
-      ],
-      8: [
-        0x1ff, 0x1ff, 0x183, 0x183, 0x183, 0x1ff, 0x1ff, 0x183, 0x183, 0x183,
-        0x183, 0x1ff, 0x1ff,
-      ],
-      9: [
-        0x1ff, 0x1ff, 0x183, 0x183, 0x183, 0x1ff, 0x1ff, 0x003, 0x003, 0x003,
-        0x003, 0x1ff, 0x1ff,
-      ],
-    },
-  },
-  bold: {
-    width: 10,
-    height: 16,
-    glyphs: {
-      0: [
-        0x3ff, 0x3ff, 0x3ff, 0x303, 0x303, 0x303, 0x303, 0x303, 0x303, 0x303,
-        0x303, 0x3ff, 0x3ff, 0x3ff,
-      ],
-      1: [
-        0x030, 0x030, 0x030, 0x030, 0x030, 0x030, 0x030, 0x030, 0x030, 0x030,
-        0x030, 0x030, 0x030, 0x030,
-      ],
-      2: [
-        0x3ff, 0x3ff, 0x300, 0x300, 0x300, 0x3ff, 0x3ff, 0x3ff, 0x300, 0x300,
-        0x300, 0x3ff, 0x3ff, 0x3ff,
-      ], // wait i messed up 2
-      2: [
-        0x3ff, 0x3ff, 0x003, 0x003, 0x003, 0x3ff, 0x3ff, 0x3ff, 0x300, 0x300,
-        0x300, 0x3ff, 0x3ff, 0x3ff,
-      ],
-      3: [
-        0x3ff, 0x3ff, 0x003, 0x003, 0x003, 0x3ff, 0x3ff, 0x3ff, 0x003, 0x003,
-        0x003, 0x3ff, 0x3ff, 0x3ff,
-      ],
-      4: [
-        0x303, 0x303, 0x303, 0x303, 0x303, 0x3ff, 0x3ff, 0x3ff, 0x003, 0x003,
-        0x003, 0x003, 0x003, 0x003,
-      ],
-      5: [
-        0x3ff, 0x3ff, 0x300, 0x300, 0x300, 0x3ff, 0x3ff, 0x3ff, 0x003, 0x003,
-        0x003, 0x3ff, 0x3ff, 0x3ff,
-      ],
-      6: [
-        0x3ff, 0x3ff, 0x300, 0x300, 0x300, 0x3ff, 0x3ff, 0x3ff, 0x303, 0x303,
-        0x303, 0x3ff, 0x3ff, 0x3ff,
-      ],
-      7: [
-        0x3ff, 0x3ff, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003, 0x003,
-        0x003, 0x003, 0x003, 0x003,
-      ],
-      8: [
-        0x3ff, 0x3ff, 0x303, 0x303, 0x303, 0x3ff, 0x3ff, 0x3ff, 0x303, 0x303,
-        0x303, 0x3ff, 0x3ff, 0x3ff,
-      ],
-      9: [
-        0x3ff, 0x3ff, 0x303, 0x303, 0x303, 0x3ff, 0x3ff, 0x3ff, 0x003, 0x003,
-        0x003, 0x3ff, 0x3ff, 0x3ff,
-      ],
-    },
-  },
-};
-
-function drawDigit(pixels, digit, x, y, color, style = "classic") {
-  const font = FONTS[style] || FONTS.classic;
-  const glyph = font.glyphs[digit];
-  if (!glyph) return;
-  for (let row = 0; row < glyph.length; row++) {
-    for (let col = 0; col < font.width; col++) {
-      if ((glyph[row] >> (font.width - 1 - col)) & 1) {
-        const px = x + col;
-        const py = y + row;
-        if (px >= 0 && px < SIZE && py >= 0 && py < SIZE) {
-          const idx = (py * SIZE + px) * 4;
-          pixels[idx] = color[0];
-          pixels[idx + 1] = color[1];
-          pixels[idx + 2] = color[2];
-          pixels[idx + 3] = 255;
-        }
-      }
-    }
-  }
-}
-
-function drawText(pixels, text, x, y, color, style = "classic") {
-  const font = FONTS[style] || FONTS.classic;
-  let curX = x;
-  for (const char of String(text)) {
-    drawDigit(pixels, parseInt(char, 10), curX, y, color, style);
-    curX += font.width + 1; // digit width + 1 spacing
-  }
-}
-
 /**
  * Draws two vertical bars instead of rings.
  */
@@ -543,6 +281,7 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
           const sqY2 = sqY1 + sq - 1;
           drawRoundedRect(
             pixels,
+            SIZE,
             sqX1,
             sqY1,
             sqX2,
@@ -558,7 +297,7 @@ function makeIcon(sessionPct, weeklyPct, settings = {}) {
         }
         // "none" → white text, no background
 
-        drawText(pixels, str, textX, textY, textColor, style);
+        drawText(pixels, SIZE, str, textX, textY, textColor, style);
       }
     }
   }

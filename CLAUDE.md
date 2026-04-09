@@ -21,7 +21,9 @@ npm start
 | `src/core/hook-server.js` | HTTP hook server - receives Claude Code stop/notify hooks |
 | `src/core/tray.js` | Tray icon, context menu, display cycling, threshold checking |
 | `src/core/windows.js` | Login window (OAuth flow) and dashboard window management |
-| `src/core/icon.js` | Runtime PNG generation - dual progress ring + spin animation |
+| `src/core/png-utils.js` | Low-level PNG encoding (crc32, pixelsToPNG, drawRoundedRect) |
+| `src/core/fonts.js` | Pixel font definitions (classic, digital, bold) + drawText |
+| `src/core/icon.js` | Tray icon rendering - rings, bars, spin animation |
 | `src/core/updater.js` | Auto-update wrapper around `electron-updater`; skips in dev mode |
 | `src/core/usage-parser.js` | Parses `five_hour` / `seven_day` fields from usage API response |
 | `src/core/scraper.js` | Fetches usage data via hidden BrowserWindow + CDP Fetch interception |
