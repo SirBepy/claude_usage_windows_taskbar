@@ -30,6 +30,8 @@ npm start
 | `src/core/session.js` | `clearClaudeCookies()` |
 | `src/core/history.js` | Snapshot persistence - read/write/prune usage history |
 | `src/core/settings.js` | Load/save user settings to disk |
+| `src/core/path-decoder.js` | Decode Claude project dir names back to filesystem paths |
+| `src/core/fs-utils.js` | File traversal helpers (walkJsonl, buildSessionCwdMap, buildSessionFileMap) |
 | `src/renderer/dashboard.html` | Dashboard + settings UI (single-file SPA) |
 | `src/renderer/dashboard.css` | Dashboard styles |
 | `src/renderer/dashboard.js` | Dashboard renderer logic |

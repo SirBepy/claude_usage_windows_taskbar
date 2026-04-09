@@ -5,6 +5,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { parseTranscript } = require("./transcript-parser");
+const { decodeCwd } = require("./path-decoder");
+const { walkJsonl, buildSessionCwdMap, buildSessionFileMap } = require("./fs-utils");
 
 const TOKEN_HISTORY_PATH = path.join(app.getPath("userData"), "token-history.json");
 
@@ -59,122 +61,6 @@ function appendSession({ sessionId, cwd, date, startedAt, lastActiveAt, inputTok
   }
 
   return history;
-}
-
-/**
- * Best-effort decode of a Claude project dir name back to a filesystem path.
- * Claude encodes path separators, spaces, and colons (Windows) all as "-".
- * Example: "c--Users-tecno-My-Project" → "c:\Users\tecno\My Project"
- *
- * We greedily walk the segments and check the filesystem. At each step we try
- * merging the next segment with "-" (hyphen in name) or " " (space in name)
- * before falling back to treating it as a path separator.
- */
-function decodeCwd(encoded) {
-  const sep = process.platform === "win32" ? "\\" : "/";
-  let root, parts;
-
-  if (process.platform === "win32") {
-    const driveSep = encoded.indexOf("--");
-    if (driveSep !== -1) {
-      root = encoded.slice(0, driveSep) + ":\\";
-      parts = encoded.slice(driveSep + 2).split("-");
-    } else {
-      return encoded;
-    }
-  } else {
-    root = "/";
-    parts = encoded.split("-");
-  }
-
-  // Collapse empty segments caused by "--" in the middle of the path.
-  // Claude encodes "." (dot prefix) as "-", so ".claude" → "--claude" which
-  // after splitting on "-" gives ["", "claude"]. Collapse these into ".claude".
-  const collapsed = [];
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i] === "" && i + 1 < parts.length) {
-      collapsed.push("." + parts[i + 1]);
-      i++;
-    } else {
-      collapsed.push(parts[i]);
-    }
-  }
-
-  // Greedy walk: at each "-" boundary, prefer merging with "-" or " " when the
-  // merged path exists on disk, falling back to treating it as a path separator.
-  const resolved = [collapsed[0]];
-  for (let i = 1; i < collapsed.length; i++) {
-    const prefix = resolved.slice(0, -1);
-    const last = resolved[resolved.length - 1];
-    let merged = null;
-
-    for (const joiner of ["-", " "]) {
-      const candidate = last + joiner + collapsed[i];
-      const candidatePath = root + prefix.concat(candidate).join(sep);
-      try {
-        fs.statSync(candidatePath);
-        merged = candidate;
-        break;
-      } catch { /* try next joiner */ }
-    }
-
-    if (merged !== null) {
-      resolved[resolved.length - 1] = merged;
-    } else {
-      resolved.push(collapsed[i]);
-    }
-  }
-
-  return root + resolved.join(sep);
-}
-
-/**
- * Recursively collect all .jsonl files under a directory.
- */
-function walkJsonl(dir) {
-  const results = [];
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...walkJsonl(full));
-      } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-        results.push(full);
-      }
-    }
-  } catch { /* skip unreadable dirs */ }
-  return results;
-}
-
-/**
- * Build a map of sessionId → decoded cwd from ~/.claude/projects/ on disk.
- * Used by both backfill and repair.
- */
-function buildSessionCwdMap() {
-  const projectsDir = path.join(os.homedir(), ".claude", "projects");
-  const files = walkJsonl(projectsDir);
-  const map = new Map();
-  for (const filePath of files) {
-    const sessionId = path.basename(filePath, ".jsonl");
-    const projectDirName = path.basename(path.dirname(filePath));
-    map.set(sessionId, decodeCwd(projectDirName));
-  }
-  return map;
-}
-
-/**
- * Build a map of sessionId → filePath from ~/.claude/projects/ on disk.
- */
-function buildSessionFileMap() {
-  const projectsDir = path.join(os.homedir(), ".claude", "projects");
-  const files = walkJsonl(projectsDir);
-  const map = new Map();
-  for (const filePath of files) {
-    const sessionId = path.basename(filePath, ".jsonl");
-    map.set(sessionId, filePath);
-  }
-  return map;
 }
 
 /**
