@@ -29,6 +29,7 @@ npm start
 | `src/core/history.js` | Snapshot persistence - read/write/prune usage history |
 | `src/core/settings.js` | Load/save user settings to disk |
 | `src/renderer/dashboard.html` | Dashboard + settings UI (single-file SPA) |
+| `src/renderer/dashboard.css` | Dashboard styles |
 | `src/renderer/dashboard.js` | Dashboard renderer logic |
 | `src/renderer/preload.js` | Electron contextBridge — exposes IPC to renderer |
 | `src/assets/icon.png` | App icon (512×512, for window chrome and installer) |

@@ -4,21 +4,6 @@
 
 ---
 
-## [T-021] Extract dashboard CSS into separate file
-**Status:** planned
-**Added:** 2026-04-09
-**Description:** Extract the ~533 lines of embedded `<style>` from `dashboard.html` into `src/renderer/dashboard.css`, linked via `<link>`. Reduces dashboard.html from ~1005 to ~470 lines and improves cacheability.
-**Questions:**
-- [x] Module loading approach? "Multiple script tags in dependency order, window globals for shared state"
-
-**Plan:**
-1. Create `src/renderer/dashboard.css` containing the full contents of the `<style>` block (lines 13-545 of dashboard.html)
-2. In `dashboard.html`, replace the `<style>...</style>` block with `<link rel="stylesheet" href="dashboard.css">`
-3. Update the CSP meta tag to allow `style-src 'self' https://fonts.googleapis.com` (remove `'unsafe-inline'` since styles are now external)
-4. Verify the dashboard renders identically
-
----
-
 ## [T-029] Extract icon.js PNG primitives and fonts
 **Status:** planned
 **Added:** 2026-04-09
