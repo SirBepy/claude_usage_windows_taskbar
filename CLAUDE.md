@@ -17,13 +17,16 @@ npm start
 
 | File | Role |
 |---|---|
-| `main.js` | App lifecycle, tray, windows, polling, IPC |
-| `src/core/icon.js` | Runtime PNG generation — dual progress ring + spin animation |
+| `main.js` | App lifecycle, polling, IPC, state coordination |
+| `src/core/hook-server.js` | HTTP hook server - receives Claude Code stop/notify hooks |
+| `src/core/tray.js` | Tray icon, context menu, display cycling, threshold checking |
+| `src/core/windows.js` | Login window (OAuth flow) and dashboard window management |
+| `src/core/icon.js` | Runtime PNG generation - dual progress ring + spin animation |
 | `src/core/updater.js` | Auto-update wrapper around `electron-updater`; skips in dev mode |
 | `src/core/usage-parser.js` | Parses `five_hour` / `seven_day` fields from usage API response |
 | `src/core/scraper.js` | Fetches usage data via hidden BrowserWindow + CDP Fetch interception |
 | `src/core/session.js` | `clearClaudeCookies()` |
-| `src/core/history.js` | Snapshot persistence — read/write/prune usage history |
+| `src/core/history.js` | Snapshot persistence - read/write/prune usage history |
 | `src/core/settings.js` | Load/save user settings to disk |
 | `src/renderer/dashboard.html` | Dashboard + settings UI (single-file SPA) |
 | `src/renderer/dashboard.js` | Dashboard renderer logic |
