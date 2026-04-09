@@ -21,30 +21,6 @@
 
 ---
 
-## [T-024] Extract dashboard settings module
-**Status:** planned
-**Added:** 2026-04-09
-**Description:** Pull the ~280 lines of settings UI logic out of `dashboard.js` into `src/renderer/modules/settings.js`. Includes: 35+ DOM element refs, `saveSettings`, color picker handlers, sound config, visibility toggles, `updateColorModeVisibility`, `renderUpdateState`.
-**Questions:**
-- [x] Module loading approach? "Multiple script tags, window globals for shared state"
-- [x] Shared state approach? "Window globals"
-
-**Plan:**
-1. Create `src/renderer/modules/settings.js` containing (from dashboard.js lines 1226-1511):
-   - All 35+ `document.getElementById()` DOM refs (displayMode, iconStyle, etc.)
-   - `saveSettings()` function
-   - `createColorRow()`, `updateVisibilities()`, `updateColorModeVisibility()`
-   - `renderUpdateState()`
-   - The `window.onload` handler that initializes settings UI
-   - All event listeners for settings inputs (change handlers, sound pickers, preview buttons)
-   - `refreshUpdateBtn` and `copyLogsBtn` click handlers
-2. `saveSettings()` writes to `currentSettings` (window global) and calls `renderHistory()` - both available as globals
-3. Remove all moved code from `dashboard.js`
-4. In `dashboard.html`, add `<script src="modules/settings.js"></script>` after dashboard.js (settings binds to DOM elements so must load after HTML)
-5. Verify all settings pages, color pickers, sound config, and update UI work
-
----
-
 ## [T-025] Extract dashboard project/stats module
 **Status:** planned
 **Added:** 2026-04-09
