@@ -21,32 +21,6 @@
 
 ---
 
-## [T-023] Extract dashboard chart rendering module
-**Status:** planned
-**Added:** 2026-04-09
-**Description:** Pull chart rendering logic out of `dashboard.js` (~500 lines) into `src/renderer/modules/chart.js`. Includes: `buildChart`, `applyLineVisibility`, `setupLegendToggles`, `buildProjectBarsView`, `buildGraphCard`, `openGraphDetail`, `renderGraphDetailFromCurrent`, `wireChartModeToggles`, and pagination logic.
-**Questions:**
-- [x] Module loading approach? "Multiple script tags, window globals for shared state"
-- [x] Shared state approach? "Window globals"
-
-**Plan:**
-1. Create `src/renderer/modules/chart.js` containing (from dashboard.js):
-   - Chart state: `lineVisible`, `sessionPageOffset`, `weeklyPageOffset`, `chartMode` (lines 129-138)
-   - `buildChart()` (lines 141-230ish)
-   - `applyLineVisibility()`, `setupLegendToggles()`
-   - `buildProjectBarsView()` (lines 277-365)
-   - `buildGraphCard()`, `openGraphDetail()`, `renderGraphDetailFromCurrent()`
-   - `wireChartModeToggles()` (lines 640-668)
-   - `setupPaginationButtons()` and pagination logic
-   - `graphDetailConfigs` object
-2. These functions reference globals: `currentSettings`, `lastHistory`, `lastTokenHistory`, `activeView` - all remain as window globals in dashboard.js
-3. They also call `refreshDashboard()`, `showView()`, formatters - all available as globals from other scripts
-4. Remove all moved functions/state from `dashboard.js`
-5. In `dashboard.html`, add `<script src="modules/chart.js"></script>` after formatters.js, before dashboard.js
-6. Verify chart rendering, pagination, chart/bars toggle, and graph detail all work
-
----
-
 ## [T-024] Extract dashboard settings module
 **Status:** planned
 **Added:** 2026-04-09
