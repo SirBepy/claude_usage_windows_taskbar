@@ -134,6 +134,9 @@ let lastTokenHistory = null;
 let currentSettings = {};
 let projectDetailState = { cwd: null, range: "30d", offset: 0 };
 
+// Chart vs Bars toggle state per graph type
+const chartMode = { session: "chart", weekly: "chart" };
+
 // ── Chart rendering ───────────────────────────────────────────────────────────
 function buildChart(history, weeklyStartMs, weeklyEndMs, lineKey, svgId) {
   const W = 420, H = 172;
@@ -268,6 +271,99 @@ function setupPaginationButtons() {
   if (nextWeekly) nextWeekly.onclick = () => { weeklyPageOffset = Math.max(0, weeklyPageOffset - 1); refreshDashboard(); };
 }
 
+// ── Project bars view (alternative to chart) ─────────────────────────────────
+const BAR_COLORS = ["#9d7dfc", "#6e8fff", "#7af0c0", "#e67e22", "#e74c3c"];
+
+function buildProjectBarsView(startMs, endMs, usageHistory, pctKey, maxItems, listId) {
+  if (!lastTokenHistory || !lastTokenHistory.length) {
+    return '<div class="no-data" style="padding:24px 0">No project data</div>';
+  }
+
+  // Gather projects active in window
+  const byProject = new Map();
+  for (const r of lastTokenHistory) {
+    const endTs = r.lastActiveAt || "";
+    const startTs = r.startedAt || "";
+    if (!endTs) continue;
+    const sessionEndMs = new Date(endTs).getTime();
+    if (isNaN(sessionEndMs)) continue;
+    if (startTs) {
+      const sessionStartMs = new Date(startTs).getTime();
+      if (isNaN(sessionStartMs)) continue;
+      if (sessionStartMs >= endMs || sessionEndMs <= startMs) continue;
+    } else {
+      if (sessionEndMs < startMs || sessionEndMs > endMs) continue;
+    }
+    const key = r.cwd || "(unknown)";
+    if (!byProject.has(key)) byProject.set(key, { cwd: key, tokens: 0 });
+    byProject.get(key).tokens += totalTok(r);
+  }
+
+  const projects = Array.from(byProject.values()).sort((a, b) => b.tokens - a.tokens);
+  if (!projects.length) {
+    return '<div class="no-data" style="padding:24px 0">No projects in this window</div>';
+  }
+
+  // Compute % attribution from usage delta
+  const pctField = pctKey === "w" ? "weekly_pct" : "session_pct";
+  let totalPct = null;
+  if (usageHistory && usageHistory.length) {
+    const windowPts = usageHistory
+      .filter((r) => r[pctField] != null)
+      .map((r) => ({ t: hourToMs(r.hour), pct: r[pctField] }))
+      .filter((p) => p.t >= startMs && p.t <= endMs)
+      .sort((a, b) => a.t - b.t);
+    if (windowPts.length >= 2) {
+      totalPct = windowPts[windowPts.length - 1].pct - windowPts[0].pct;
+      if (totalPct <= 0) totalPct = null;
+    }
+  }
+
+  const totalTokens = projects.reduce((s, p) => s + p.tokens, 0);
+  const maxTokens = projects[0].tokens;
+
+  // Top 5, rest as "Other"
+  const top = maxItems ? projects.slice(0, maxItems) : projects;
+  const rest = maxItems ? projects.slice(maxItems) : [];
+  const otherTokens = rest.reduce((s, p) => s + p.tokens, 0);
+
+  const rows = top.map((p, i) => {
+    const pct = totalPct !== null ? Math.round((p.tokens / totalTokens) * totalPct) : null;
+    const barWidth = Math.max(2, Math.round((p.tokens / maxTokens) * 100));
+    const color = BAR_COLORS[i % BAR_COLORS.length];
+    return `<div class="project-bar-row">
+      <span class="project-bar-label" title="${p.cwd}">${projectLabel(p.cwd)}</span>
+      <div class="project-bar-track">
+        <div class="project-bar-fill" style="width:${barWidth}%;background:${color}"></div>
+      </div>
+      <span class="project-bar-value">${pct !== null ? pct + "%" : fmtK(p.tokens)}</span>
+    </div>`;
+  });
+
+  if (otherTokens > 0) {
+    const pct = totalPct !== null ? Math.round((otherTokens / totalTokens) * totalPct) : null;
+    const barWidth = Math.max(2, Math.round((otherTokens / maxTokens) * 100));
+    rows.push(`<div class="project-bar-row">
+      <span class="project-bar-label" style="color:var(--text-dim)">Other</span>
+      <div class="project-bar-track">
+        <div class="project-bar-fill" style="width:${barWidth}%;background:var(--text-dim)"></div>
+      </div>
+      <span class="project-bar-value">${pct !== null ? pct + "%" : fmtK(otherTokens)}</span>
+    </div>`);
+
+    if (listId) {
+      rows.push(`<div class="project-bars-more" data-bars-list-id="${listId}">Show ${rest.length} more</div>`);
+    }
+  }
+
+  const totalLabel = totalPct !== null ? `Total: ${totalPct}%` : `Total: ${fmtK(totalTokens)} tokens`;
+
+  return `<div class="project-bars">
+    ${rows.join("")}
+    <div class="project-bars-total">${totalLabel}</div>
+  </div>`;
+}
+
 // Store configs so the detail view can re-render the same graph with full project list
 const graphDetailConfigs = {};
 
@@ -293,21 +389,31 @@ function buildGraphCard(opts) {
   const { id, history, startMs, endMs, lineKey, pctKey, pageOffset, hasPrev, prevId, nextId, pageLabel, legends, maxItems } = opts;
   const svgId = `chart-${id}`;
   const projectListId = `window-${id}-${startMs}`;
+  const mode = chartMode[id] || "chart";
 
   // Save config for detail view
   graphDetailConfigs[projectListId] = opts;
+
+  const chartActive = mode === "chart" ? " active" : "";
+  const barsActive = mode === "bars" ? " active" : "";
+
+  const chartContent = mode === "chart"
+    ? `<div class="chart-legend">${legends.join("")}</div>
+       ${buildChart(history, startMs, endMs, lineKey, svgId)}
+       ${buildWindowProjectsHTML(startMs, endMs, history, pctKey, maxItems, projectListId)}`
+    : buildProjectBarsView(startMs, endMs, history, pctKey, maxItems, projectListId);
 
   return `<div class="chart-container"${id === "session" ? ' style="margin-bottom:12px"' : ""}>
     <div class="chart-pagination">
       <button id="${prevId}" class="btn-secondary" ${hasPrev ? "" : "disabled"}>◀</button>
       <span class="chart-pagination-label">${pageLabel}</span>
       <button id="${nextId}" class="btn-secondary" ${pageOffset === 0 ? "disabled" : ""}>▶</button>
+      <div class="chart-mode-toggle">
+        <button class="chart-mode-btn${chartActive}" data-mode="chart" data-graph="${id}">Chart</button>
+        <button class="chart-mode-btn${barsActive}" data-mode="bars" data-graph="${id}">Bars</button>
+      </div>
     </div>
-    <div class="chart-legend">
-      ${legends.join("")}
-    </div>
-    ${buildChart(history, startMs, endMs, lineKey, svgId)}
-    ${buildWindowProjectsHTML(startMs, endMs, history, pctKey, maxItems, projectListId)}
+    ${chartContent}
   </div>`;
 }
 
@@ -337,6 +443,7 @@ function openGraphDetail(listId) {
   }
 
   wireProjectListClicks(container, refreshDashboard);
+  wireChartModeToggles(container);
   showView("graph-detail");
 }
 
@@ -398,6 +505,7 @@ function renderGraphDetailFromCurrent(type) {
   }
 
   wireProjectListClicks(container, refreshDashboard);
+  wireChartModeToggles(container);
 }
 
 function renderHistory(history) {
@@ -526,6 +634,37 @@ function renderHistory(history) {
   setupLegendToggles();
   applyLineVisibility();
   setupPaginationButtons();
+  wireChartModeToggles(statsContent);
+}
+
+/** Wire chart/bars toggle buttons and bars "Show X more" links within a container. */
+function wireChartModeToggles(container) {
+  if (!container) return;
+  container.querySelectorAll(".chart-mode-btn").forEach((btn) => {
+    if (btn._wired) return;
+    btn._wired = true;
+    btn.onclick = () => {
+      const graphId = btn.dataset.graph;
+      const mode = btn.dataset.mode;
+      if (chartMode[graphId] === mode) return;
+      chartMode[graphId] = mode;
+      if (activeView === "graph-detail") {
+        renderGraphDetailFromCurrent(graphId);
+      } else {
+        refreshDashboard();
+      }
+    };
+  });
+  container.querySelectorAll(".project-bars-more").forEach((link) => {
+    if (link._wired) return;
+    link._wired = true;
+    link.onclick = () => {
+      const listId = link.dataset.barsListId;
+      if (listId && graphDetailConfigs[listId]) {
+        openGraphDetail(listId);
+      }
+    };
+  });
 }
 
 // Merge active (live) sessions into token history so project lists show ongoing work.

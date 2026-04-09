@@ -459,6 +459,89 @@
         }
         .range-btn.active { background: var(--primary); color: var(--bg); border-color: var(--primary); }
         .range-btn:hover:not(.active) { border-color: var(--primary); color: var(--primary); }
+
+        /* ── Chart/Bars toggle ── */
+        .chart-mode-toggle {
+            display: flex;
+            gap: 2px;
+            background: var(--surface-alt);
+            border-radius: 6px;
+            padding: 2px;
+        }
+        .chart-mode-btn {
+            padding: 2px 8px;
+            font-size: 0.68rem;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text-dim);
+            border: none;
+            cursor: pointer;
+            font-family: 'DM Sans', system-ui, sans-serif;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .chart-mode-btn.active {
+            background: var(--border);
+            color: var(--text);
+        }
+        .chart-mode-btn:hover:not(.active) {
+            color: var(--text);
+        }
+
+        /* ── Horizontal project bars ── */
+        .project-bars { margin-top: 4px; }
+        .project-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .project-bar-label {
+            font-size: 0.75rem;
+            color: var(--text);
+            min-width: 80px;
+            max-width: 100px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .project-bar-track {
+            flex: 1;
+            height: 14px;
+            background: var(--surface-alt);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .project-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            min-width: 2px;
+        }
+        .project-bar-value {
+            font-size: 0.72rem;
+            font-family: 'Fira Code', monospace;
+            color: var(--text-dim);
+            min-width: 32px;
+            flex-shrink: 0;
+        }
+        .project-bars-total {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-align: right;
+            margin-top: 4px;
+            font-family: 'Fira Code', monospace;
+        }
+        .project-bars-more {
+            font-size: 0.72rem;
+            color: var(--primary);
+            cursor: pointer;
+            text-align: center;
+            margin-top: 4px;
+        }
+        .project-bars-more:hover { text-decoration: underline; }
     </style>
 </head>
 
@@ -637,16 +720,18 @@
                     </label>
                 </div>
                 <div class="option">
-                    <span class="option-label">Remaining Tokens Estimate</span>
-                    <label class="switch">
-                        <input type="checkbox" id="tooltipEstimateTokens">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div class="option">
                     <span class="option-label">Use Colors</span>
                     <label class="switch">
                         <input type="checkbox" id="tooltipUseColors">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="section">
+                <div class="option">
+                    <span class="option-label">Remaining Tokens Estimate</span>
+                    <label class="switch">
+                        <input type="checkbox" id="tooltipEstimateTokens">
                         <span class="slider"></span>
                     </label>
                 </div>

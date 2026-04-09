@@ -1,47 +1,43 @@
 # TODOs
 
-<\!-- last-id: 20 -->
-
-## [T-017] Chart/bar graph toggle per usage graph
-**Status:** planned
-**Added:** 2026-04-08
-**Description:** Each usage graph gets a toggle to switch between the current chart view and a per-project bar breakdown (e.g. "80% total, 60% by Project A, 20% by Project B").
-**Questions:**
-- [x] Bar visualization style? "Horizontal bars per project, sorted descending by contribution"
-- [x] Toggle placement? "In the graph header, small tabs next to the title"
-- [x] Max projects shown? "Top 5, rest as 'Other'. 'Show X more' link navigates to the existing all-projects screen for that timeframe"
-
-**Plan:**
-1. Add `[Chart] [Bars]` toggle tabs in the graph header area (next to "Session (5h)" / "Weekly (7d)" titles) in `dashboard.html`/`dashboard.js`
-2. Track toggle state per graph (session vs weekly) in dashboard.js state
-3. Create `buildProjectBarsView(lineKey, windowStart, windowEnd)` in `dashboard.js` that:
-   - Reuses the existing `buildWindowProjectsHTML()` attribution logic (projectTokens/totalTokens * percentageGain)
-   - Renders horizontal bars per project, sorted descending
-   - Shows top 5 projects, groups remainder into "Other"
-   - Shows a "Show X more" link that navigates to the existing stats/project detail screen filtered to that timeframe
-   - Displays total % at the bottom
-4. When "Bars" tab is active, replace the SVG chart area with the horizontal bars view
-5. When "Chart" tab is active, show the existing SVG polyline chart (current behavior)
-6. Style the toggle to match existing dashboard theme (dark background, matching colors)
-
----
+<!-- last-id: 30 -->
 
 ## [T-019] Fix sound not firing for AskUserQuestion
-**Status:** pending
+**Status:** planned
 **Added:** 2026-04-09
-**Description:** Sound notification does not play when AskUserQuestion is fired. Need to investigate why the sound hook is not triggering and fix it.
+**Description:** Sound notification does not play when AskUserQuestion is fired. Root cause: no Claude Code hook is configured for AskUserQuestion to POST to the toolbar's /notify endpoint.
 **Questions:**
-_(none)_
+- [x] Is sound broken for all events or just AskUserQuestion? "Only AskUserQuestion broken, other sounds work"
+- [x] Is the Claude Code hook configured? "No, only a Stop hook exists (POST /refresh). No AskUserQuestion hook."
+- [x] Fix approach? "Add an AskUserQuestion hook in ~/.claude/settings.json that POSTs to http://127.0.0.1:27182/notify"
 
 **Plan:**
-_(empty)_
+1. Add a `NotifyUser` hook entry in `~/.claude/settings.json` under `hooks` that runs `curl -s -X POST http://127.0.0.1:27182/notify` when AskUserQuestion fires
+2. Verify the /notify endpoint in main.js (lines 63-73) correctly reads `settings.sounds.questionAsked` and calls `playSound()` - already works
+3. Test by triggering AskUserQuestion in Claude Code and confirming the sound plays
 
 ---
 
 ## [T-020] Don't log out on network drop
+**Status:** planned
+**Added:** 2026-04-09
+**Description:** When WiFi drops temporarily (common on macOS), the app shows the login window and clears cookies, forcing re-authentication. The scraper's `did-navigate` handler catches a /login redirect (caused by the network blip) as an auth failure. Should tolerate transient network failures silently and wait for next poll.
+**Questions:**
+- [x] What happens when WiFi drops? "Login window pops up actively"
+- [x] Retry behavior on network error? "Just wait for next poll (10 min), skip silently"
+
+**Plan:**
+1. In `src/core/scraper.js`, add a `did-fail-load` listener on the BrowserWindow that rejects with a distinct `Error("Network error")` (not HTTP 401/403) so network failures are caught before the 20s timeout
+2. In `src/core/scraper.js`, update the `did-navigate` handler to ignore navigation to error/blank pages (e.g. `chrome-error://`) that aren't actual /login redirects
+3. In `main.js` `fetchUsage()` (lines 248-258), keep `handleAuthFailure()` only for errors matching `HTTP 40[13]`. Network errors and timeouts just re-throw as-is, which `refresh()` already catches and logs silently (line 308-310)
+4. Verify that `handleAuthFailure()` (which clears cookies and shows login) is never called for network errors - only for confirmed auth failures
+
+---
+
+## [T-021] Extract dashboard CSS into separate file
 **Status:** pending
 **Added:** 2026-04-09
-**Description:** When WiFi drops temporarily (common on macOS), the app treats it as an expired session and logs the user out, forcing re-authentication. The app should tolerate transient network failures and only log out on a genuine auth expiry, not a connectivity blip.
+**Description:** Extract the ~533 lines of embedded `<style>` from `dashboard.html` into `src/renderer/dashboard.css`, linked via `<link>`. Reduces dashboard.html from ~1005 to ~470 lines and improves cacheability.
 **Questions:**
 _(none)_
 
@@ -50,3 +46,110 @@ _(empty)_
 
 ---
 
+## [T-022] Extract dashboard formatters module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull formatting/color utility functions (`hourToMs`, `pctColor`, `getThresholdColor`, `getPaceColor`, `valueColor`, `fmtPct`, `fmtResetTime`) out of `dashboard.js` into `src/renderer/modules/formatters.js`. These are pure functions with no DOM dependencies.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-023] Extract dashboard chart rendering module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull chart rendering logic out of `dashboard.js` (~500 lines) into `src/renderer/modules/chart.js`. Includes: `buildChart`, `applyLineVisibility`, `setupLegendToggles`, `buildProjectBarsView`, `buildGraphCard`, `openGraphDetail`, `renderGraphDetailFromCurrent`, `wireChartModeToggles`, and pagination logic.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-024] Extract dashboard settings module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull the ~280 lines of settings UI logic out of `dashboard.js` into `src/renderer/modules/settings.js`. Includes: 35+ DOM element refs, `saveSettings`, color picker handlers, sound config, visibility toggles, `updateColorModeVisibility`, `renderUpdateState`.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-025] Extract dashboard project/stats module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull project list and stats rendering (~500 lines) out of `dashboard.js` into `src/renderer/modules/stats.js`. Includes: `aggregateByProject`, `buildProjectListHTML`, `wireProjectListClicks`, `buildTodaySectionHTML`, `buildWindowProjectsHTML`, `renderStats`, `openProjectDetail`, `renderProjectDetail`, `buildBarChartSVG`, `renderSessionsList`, `timeAgo`, `setupBackfillBtn`.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-026] Extract main.js hook server module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull the HTTP hook server (~70 lines, handles Claude Code stop hooks) from `main.js` into `src/core/hook-server.js`. Clean export that accepts callbacks for session-end events.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-027] Extract main.js tray management module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull tray-related logic from `main.js` into `src/core/tray.js`. Includes: `updateTray`, `buildContextMenu`, `createTray`, display cycling (`buildDisplayCycle`, `cycleDisplayMode`, `resetDisplayMode`), and threshold checking.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-028] Extract main.js window management module
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull `showLoginWindow` (with OAuth popup handling and SPA detection) and `showDashboardWindow` from `main.js` into `src/core/windows.js`.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-029] Extract icon.js PNG primitives and fonts
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull low-level PNG encoding (`crc32`, `pngChunk`, `pixelsToPNG`, `drawRoundedRect`) into `src/core/png-utils.js` and the 3 pixel font definitions + `drawDigit`/`drawText` into `src/core/fonts.js`. Reduces icon.js from 624 to ~300 lines focused on ring/bar rendering.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
+
+## [T-030] Extract token-stats.js path decoder and fs utils
+**Status:** pending
+**Added:** 2026-04-09
+**Description:** Pull `decodeCwd` path recovery logic into `src/core/path-decoder.js` and file traversal helpers (`walkJsonl`, `buildSessionCwdMap`, `buildSessionFileMap`) into `src/core/fs-utils.js`. Reduces token-stats.js from 452 to ~280 lines focused on session/backfill logic.
+**Questions:**
+_(none)_
+
+**Plan:**
+_(empty)_
+
+---
